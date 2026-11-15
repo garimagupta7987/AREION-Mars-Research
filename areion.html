@@ -1,0 +1,3026 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AREION // Martian Surface Explorer & Planetary GIS Workstation</title>
+
+  <!-- Google Fonts: Space Grotesk, Inter, IBM Plex Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- OpenLayers CSS & JS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.3.1/ol.css" />
+  <script src="https://cdn.jsdelivr.net/npm/ol@v10.3.1/dist/ol.js"></script>
+
+  <!-- Three.js WebGL Library for 3D Mars Globe Locator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            mars: {
+              void: '#06090E',
+              bg: '#090D14',
+              secondary: '#0E1520',
+              panel: '#121B28',
+              elevated: '#182435',
+              accent: '#E06D4B',
+              ochre: '#D49B6A',
+              text: '#ECF1F8',
+              muted: '#8C9DB5',
+              border: '#223144',
+              success: '#4CC38A',
+              warning: '#E5A952',
+            }
+          },
+          fontFamily: {
+            display: ['Space Grotesk', 'Inter', 'sans-serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      background-color: #06090E;
+      background-image:
+        radial-gradient(circle at 18% -8%, rgba(224, 109, 75, 0.13), transparent 42%),
+        radial-gradient(circle at 85% 12%, rgba(212, 155, 106, 0.08), transparent 38%),
+        radial-gradient(rgba(140, 157, 181, 0.07) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 24px 24px;
+      color: #ECF1F8;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    /* Subtle aerospace corner brackets on key cards */
+    .hud-card {
+      position: relative;
+      background: linear-gradient(180deg, rgba(20, 30, 44, 0.92) 0%, rgba(14, 21, 32, 0.96) 100%);
+      border: 1px solid #223144;
+      box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.65);
+    }
+    .hud-card::before,
+    .hud-card::after {
+      content: '';
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      pointer-events: none;
+    }
+    .hud-card::before {
+      top: -1px;
+      left: -1px;
+      border-top: 2px solid rgba(224, 109, 75, 0.65);
+      border-left: 2px solid rgba(224, 109, 75, 0.65);
+    }
+    .hud-card::after {
+      bottom: -1px;
+      right: -1px;
+      border-bottom: 2px solid rgba(224, 109, 75, 0.65);
+      border-right: 2px solid rgba(224, 109, 75, 0.65);
+    }
+
+    /* OpenLayers Custom Controls */
+    .ol-zoom {
+      top: 4.25rem !important;
+      left: 0.85rem !important;
+      background: rgba(14, 21, 32, 0.92) !important;
+      border: 1px solid #223144 !important;
+      border-radius: 6px !important;
+      padding: 3px !important;
+      backdrop-filter: blur(8px);
+    }
+    .ol-zoom button {
+      background: #182435 !important;
+      color: #ECF1F8 !important;
+      border: 1px solid #223144 !important;
+      font-family: 'IBM Plex Mono', monospace !important;
+      width: 28px !important;
+      height: 28px !important;
+      margin: 2px !important;
+      border-radius: 4px !important;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .ol-zoom button:hover {
+      background: #E06D4B !important;
+      color: #06090E !important;
+      border-color: #E06D4B !important;
+    }
+    .ol-attribution {
+      background: rgba(6, 9, 14, 0.88) !important;
+      color: #8C9DB5 !important;
+      font-family: 'IBM Plex Mono', monospace !important;
+      font-size: 10px !important;
+      border-top: 1px solid #223144;
+      border-left: 1px solid #223144;
+      padding: 3px 8px !important;
+    }
+    .ol-attribution a {
+      color: #D49B6A !important;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090D14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #223144;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #E06D4B;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-mars-accent/30 selection:text-white">
+
+  <!-- TOP MISSION TELEMETRY & EPHEMERIS HEADER -->
+  <header class="sticky top-0 z-40 h-16 bg-mars-secondary/95 backdrop-blur-md border-b border-mars-border px-4 lg:px-6 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <button
+        id="mobileMenuBtn"
+        class="lg:hidden p-2 rounded border border-mars-border bg-mars-panel text-mars-text hover:border-mars-accent"
+        title="Toggle Navigation"
+      >
+        <i data-lucide="menu" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Mission Emblem -->
+      <div class="relative flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-mars-accent/25 to-mars-ochre/10 border border-mars-accent/60 shadow-inner">
+        <span class="font-display font-bold text-sm tracking-wider text-mars-accent">MS</span>
+        <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-mars-success ring-4 ring-mars-secondary"></span>
+      </div>
+
+      <div>
+        <div class="flex items-center gap-2.5">
+          <span class="font-display font-bold tracking-widest text-base text-mars-text">AREION</span>
+          <span class="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 bg-mars-elevated border border-mars-border rounded text-mars-ochre">
+            IAU MARS 2000 // R=3,396.19 KM
+          </span>
+        </div>
+        <p class="text-[11px] text-mars-muted hidden md:block">
+          Martian Surface Explorer — 3D Orbital Locator, WMTS GIS &amp; Mastcam-Z VNIR Lab
+        </p>
+      </div>
+    </div>
+
+    <!-- Live Planetary Telemetry Readouts -->
+    <div class="flex items-center gap-4 lg:gap-6 text-xs">
+      <div class="hidden 2xl:flex flex-col border-l border-mars-border pl-4">
+        <span class="text-[10px] font-mono uppercase tracking-wider text-mars-muted">Target Sector</span>
+        <span class="font-mono text-mars-text font-medium">Jezero Crater (18.38°N, 77.58°E)</span>
+      </div>
+
+      <!-- Derived Mars24 Ephemeris Clock -->
+      <div class="hidden md:flex flex-col border-l border-mars-border pl-4" title="Calculated via NASA GISS Mars24 algorithm from system UTC">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-mars-muted">Mars Ephemeris</span>
+          <span class="text-[9px] font-mono px-1 rounded bg-mars-warning/15 text-mars-warning border border-mars-warning/30">[DERIVED]</span>
+        </div>
+        <span id="headerMarsClock" class="font-mono text-mars-ochre font-medium">Sol ---- // MTC --:--:--</span>
+      </div>
+
+      <div class="hidden xl:flex flex-col border-l border-mars-border pl-4 max-w-[210px]">
+        <span class="text-[10px] font-mono uppercase tracking-wider text-mars-muted">Active Dataset</span>
+        <span id="headerActiveDataset" class="font-mono text-mars-text truncate">THEMIS Daytime Infrared Mosaic v12</span>
+      </div>
+
+      <div class="hidden sm:flex flex-col border-l border-mars-border pl-4">
+        <span class="text-[10px] font-mono uppercase tracking-wider text-mars-muted">NASA Links</span>
+        <span id="headerServiceStatus" class="inline-flex items-center gap-1.5 font-mono text-mars-success">
+          <span class="w-2 h-2 rounded-full bg-mars-success animate-pulse"></span>
+          8/8 Ready
+        </span>
+      </div>
+
+      <!-- Settings Popover Trigger -->
+      <div class="relative">
+        <button
+          id="settingsBtn"
+          class="p-2.5 rounded-lg border border-mars-border bg-mars-panel hover:bg-mars-elevated text-mars-muted hover:text-mars-text transition"
+          title="Workstation Display Preferences"
+        >
+          <i data-lucide="SlidersHorizontal" class="w-4 h-4"></i>
+        </button>
+
+        <div
+          id="settingsPopover"
+          class="hidden absolute right-0 mt-2 w-80 rounded-lg border border-mars-border bg-mars-panel p-4 shadow-2xl z-50 text-xs space-y-3"
+        >
+          <div class="flex items-center justify-between border-b border-mars-border pb-2">
+            <span class="font-display font-semibold text-mars-text uppercase tracking-wider">HUD &amp; GIS Preferences</span>
+            <span class="font-mono text-[10px] text-mars-accent">SYS-CFG</span>
+          </div>
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-mars-muted">0.25° Coordinate Graticule</span>
+            <input id="toggleGraticule" type="checkbox" checked class="accent-mars-accent" />
+          </label>
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-mars-muted">Plot Local Field Observations</span>
+            <input id="toggleUserMarkers" type="checkbox" checked class="accent-mars-accent" />
+          </label>
+          <label class="flex items-center justify-between py-1 cursor-pointer">
+            <span class="text-mars-muted">Orbital Target Center Reticle</span>
+            <input id="toggleReticle" type="checkbox" checked class="accent-mars-accent" />
+          </label>
+          <div class="pt-2 border-t border-mars-border text-[11px] font-mono text-mars-muted space-y-1">
+            <div>Ellipsoid: IAU Mars 2000 Sphere</div>
+            <div>Radius: 3,396,190 m | Obliquity: 25.19°</div>
+            <div>Last Sync: <span id="headerLastSync" class="text-mars-text">--</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <div class="flex flex-1 min-h-0">
+    <!-- PERSISTENT LEFT NAVIGATION SIDEBAR -->
+    <aside
+      id="sidebarNav"
+      class="hidden lg:flex w-68 shrink-0 bg-mars-secondary/90 border-r border-mars-border flex-col justify-between z-30"
+    >
+      <div class="p-3.5 space-y-4">
+        <div class="px-2.5 pt-1 flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase tracking-widest text-mars-muted">Workstation Modules</span>
+          <span class="text-[10px] font-mono text-mars-accent">v3.0-3D</span>
+        </div>
+
+        <nav id="navButtonsContainer" class="space-y-1">
+          <!-- Populated dynamically by JS -->
+        </nav>
+
+        <!-- Quick-Launch Feature Shortcuts -->
+        <div class="p-3 rounded-lg border border-mars-accent/40 bg-mars-accent/10 space-y-2">
+          <div class="font-mono text-[10px] uppercase tracking-wider text-mars-accent font-semibold">
+            Quick Telemetry Jump
+          </div>
+          <button
+            onclick="state.explorerViewMode = '3d-globe'; switchModule('explorer');"
+            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded bg-mars-void/80 hover:bg-mars-elevated border border-mars-border text-[11px] font-mono text-mars-text transition"
+          >
+            <span>3D Mars Globe Locator</span>
+            <span class="text-mars-accent">WEBGL ↗</span>
+          </button>
+          <button
+            onclick="state.scienceLabMode = 'mastcamz'; switchModule('sciencelab');"
+            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded bg-mars-void/80 hover:bg-mars-elevated border border-mars-border text-[11px] font-mono text-mars-text transition"
+          >
+            <span>Mastcam-Z Filter Lab</span>
+            <span class="text-mars-ochre">14-BAND ↗</span>
+          </button>
+        </div>
+
+        <!-- Stratigraphic Column Quick-Reference Card -->
+        <div class="p-3.5 rounded-lg border border-mars-border bg-mars-panel/90 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[10px] uppercase tracking-wider text-mars-ochre font-semibold">Jezero Stratigraphy</span>
+            <span class="font-mono text-[10px] text-mars-muted">~3.7 Ga</span>
+          </div>
+          <div class="space-y-1.5 text-[11px]">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-[#D49B6A]"></span>
+              <span class="text-mars-text font-medium">Western Delta Fan</span>
+              <span class="ml-auto font-mono text-[10px] text-mars-muted">Smectite</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-[#E06D4B]"></span>
+              <span class="text-mars-text font-medium">Máaz Formation</span>
+              <span class="ml-auto font-mono text-[10px] text-mars-muted">Pyroxene</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-sm bg-[#4CC38A]"></span>
+              <span class="text-mars-text font-medium">Séítah Unit</span>
+              <span class="ml-auto font-mono text-[10px] text-mars-muted">Olivine</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Target Telemetry Box -->
+      <div class="p-3.5 m-3.5 rounded-lg border border-mars-border bg-mars-void/80 text-[11px] space-y-1.5 font-mono">
+        <div class="flex items-center justify-between text-mars-accent">
+          <span>ROI LOCK // JEZERO</span>
+          <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+        </div>
+        <div class="text-mars-muted text-[10px] leading-relaxed">
+          QUAD: Syrtis Major (MC-13)<br />
+          BASIN DIA: 45.0 km<br />
+          AEROID DATUM: -2,569 m<br />
+          ROVER REF: Octavia E. Butler
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT + FOOTER COLUMN -->
+    <main class="flex-1 min-w-0 flex flex-col justify-between overflow-x-hidden">
+      <div id="moduleContainer" class="p-4 lg:p-6 max-w-[1640px] w-full mx-auto space-y-6">
+        <!-- Active Module Rendered Here -->
+      </div>
+
+      <!-- MANDATORY SCIENTIFIC ATTRIBUTION FOOTER -->
+      <footer class="mt-10 border-t border-mars-border bg-mars-secondary/90 px-6 py-4 text-xs text-mars-muted">
+        <div class="max-w-[1640px] mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <p class="leading-relaxed max-w-4xl">
+            <strong class="text-mars-text font-mono">SCIENTIFIC DISCLAIMER:</strong> AREION is an independent scientific visualization interface. Scientific datasets are provided by their respective institutions. Visualizations and derived analyses are not substitutes for original scientific products.
+          </p>
+          <div class="flex flex-wrap items-center gap-4 shrink-0 font-mono text-[11px]">
+            <a href="https://trek.nasa.gov/mars/" target="_blank" rel="noreferrer" class="text-mars-ochre hover:text-mars-accent">NASA Mars Trek ↗</a>
+            <a href="https://pds.nasa.gov/" target="_blank" rel="noreferrer" class="text-mars-ochre hover:text-mars-accent">NASA PDS4 ↗</a>
+            <a href="https://mastcamz.asu.edu/" target="_blank" rel="noreferrer" class="text-mars-ochre hover:text-mars-accent">ASU Mastcam-Z ↗</a>
+            <a href="https://astrogeology.usgs.gov/" target="_blank" rel="noreferrer" class="text-mars-ochre hover:text-mars-accent">USGS Astrogeology ↗</a>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    /********************************************************************
+     * 1. PLANETARY CONSTANTS, EPHEMERIS & GEODESY UTILITIES
+     ********************************************************************/
+    const MARS_RADIUS_M = 3396190; // IAU Mars 2000 Equatorial/Mean Radius (m)
+    const JEZERO_CENTER = { lat: 18.38, lon: 77.58 };
+    const PERSEVERANCE_LANDING_UTC = Date.parse('2021-02-18T20:55:00Z');
+    const MARS_SOL_SECONDS = 88775.244147;
+
+    function toRad(deg) { return (deg * Math.PI) / 180; }
+    function toDeg(rad) { return (rad * 180) / Math.PI; }
+
+    function computeMarsEphemeris() {
+      const nowMs = Date.now();
+      const jdUT = 2440587.5 + nowMs / 86400000;
+      const jdTT = jdUT + (69.184 / 86400);
+      const j2000Offset = jdTT - 2451545.0;
+      const msd = (j2000Offset - 4.5) / 1.0274912517 + 44796.0 - 0.00096;
+      const mtcHours = ((msd % 1) + 1) % 1 * 24;
+      const hh = String(Math.floor(mtcHours)).padStart(2, '0');
+      const mm = String(Math.floor((mtcHours % 1) * 60)).padStart(2, '0');
+      const ss = String(Math.floor((((mtcHours % 1) * 60) % 1) * 60)).padStart(2, '0');
+      const elapsedSecSinceLanding = (nowMs - PERSEVERANCE_LANDING_UTC) / 1000;
+      const perseveranceSol = Math.max(0, Math.floor(elapsedSecSinceLanding / MARS_SOL_SECONDS));
+      return { msd: msd.toFixed(2), mtc: `${hh}:${mm}:${ss}`, perseveranceSol };
+    }
+
+    function marsDistanceMeters(a, b) {
+      const p1 = toRad(a.lat), p2 = toRad(b.lat);
+      const dp = toRad(b.lat - a.lat), dl = toRad(b.lon - a.lon);
+      const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+      return 2 * MARS_RADIUS_M * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+    }
+
+    function marsForwardAzimuth(a, b) {
+      const p1 = toRad(a.lat), p2 = toRad(b.lat), dl = toRad(b.lon - a.lon);
+      const y = Math.sin(dl) * Math.cos(p2);
+      const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    function formatMarsCoords(lat, lon, dec = 4) {
+      const ns = lat >= 0 ? 'N' : 'S';
+      const normLon = ((((lon + 180) % 360) + 360) % 360) - 180;
+      const ew = normLon >= 0 ? 'E' : 'W';
+      return `${Math.abs(lat).toFixed(dec)}°${ns}, ${Math.abs(normLon).toFixed(dec)}°${ew}`;
+    }
+
+    function formatDistance(m) {
+      return m < 1000 ? `${m.toFixed(1)} m` : `${(m / 1000).toFixed(3)} km`;
+    }
+
+    function provenanceBadgeHtml(classification, source = '') {
+      const map = {
+        'REAL DATA': 'bg-mars-success/15 text-mars-success border-mars-success/40',
+        'DERIVED': 'bg-mars-warning/15 text-mars-warning border-mars-warning/40',
+        'SAMPLE': 'bg-mars-accent/15 text-mars-accent border-mars-accent/40',
+        'USER RECORD': 'bg-mars-ochre/15 text-mars-ochre border-mars-ochre/40'
+      };
+      const cls = map[classification] || map['REAL DATA'];
+      return `<span title="${source ? `Provenance: ${classification} — ${source}` : classification}" class="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono font-semibold border rounded ${cls}">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>[${classification}]
+      </span>`;
+    }
+
+    function downloadCsv(filename, comments, headers, rows) {
+      const headerBlock = comments.map(c => `# ${c}`).join('\n');
+      const body = [
+        headers.join(','),
+        ...rows.map(r => r.map(cell => {
+          const s = String(cell ?? '');
+          return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(','))
+      ].join('\n');
+      const blob = new Blob([`${headerBlock}\n${body}\n`], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    /********************************************************************
+     * 2. VERIFIED SCIENTIFIC DATASETS, SITES, GLOBE LANDMARKS & MASTCAM-Z
+     ********************************************************************/
+    const DATASETS = [
+      {
+        id: 'trek-viking-mdim21',
+        name: 'Viking Orbiter Color Mosaic (MDIM 2.1)',
+        provider: 'USGS Astrogeology / NASA JPL Mars Trek',
+        instrument: 'Viking 1 & 2 Visual Imaging Subsystem (VIS)',
+        dataType: 'WMTS Raster Basemap (Visible RGB)',
+        sourceUrl: 'https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m',
+        resolution: '232 m/pixel',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'trek-mola-clrshade',
+        name: 'MOLA Colorized Elevation Hillshade',
+        provider: 'NASA GSFC / JPL Mars Trek',
+        instrument: 'Mars Global Surveyor (MGS) MOLA',
+        dataType: 'WMTS Hypsometric Relief Raster',
+        sourceUrl: 'https://trek.nasa.gov/tiles/Mars/EQ/Mars_MGS_MOLA_ClrShade_merge_global_463m',
+        resolution: '463 m/pixel',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'trek-themis-ir-day',
+        name: 'THEMIS Daytime Infrared Global Mosaic v12',
+        provider: 'ASU Mars Space Flight Facility / NASA JPL',
+        instrument: '2001 Mars Odyssey THEMIS (12.57 µm)',
+        dataType: 'WMTS Thermal Infrared Raster',
+        sourceUrl: 'https://trek.nasa.gov/tiles/Mars/EQ/Mars_MO_THEMIS-IR-Day_mosaic_global_100m_v12',
+        resolution: '100 m/pixel',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'trek-mola-shade',
+        name: 'MOLA Grayscale Hillshade Relief',
+        provider: 'NASA GSFC / JPL Mars Trek',
+        instrument: 'Mars Global Surveyor (MGS) MOLA',
+        dataType: 'WMTS Structural Hillshade',
+        sourceUrl: 'https://trek.nasa.gov/tiles/Mars/EQ/Mars_MGS_MOLA_Shade_global_463m',
+        resolution: '463 m/pixel',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'mastcam-z-vnir-spec',
+        name: 'Mars 2020 Mastcam-Z Multispectral Filter Set & Jezero Endmembers',
+        provider: 'ASU / NASA JPL / PDS Imaging Node (Bell et al., 2021; Rice et al., 2023)',
+        instrument: 'Mastcam-Z Twin 8-Position Filter Wheels (L0–L7, R0–R7)',
+        dataType: 'VNIR Filter Bandpasses & Relative Reflectance (442–1022 nm)',
+        sourceUrl: 'https://mastcamz.asu.edu/cameras/tech-specs/',
+        resolution: '12 Narrowband Geology Filters + Bayer RGB',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'nasa-image-library',
+        name: 'NASA Image & Video Library — Mars 2020 Archive',
+        provider: 'NASA HQ / JPL-Caltech',
+        instrument: 'Mastcam-Z, SuperCam, Navcam, Hazcam, SHERLOC, WATSON',
+        dataType: 'REST JSON + Calibrated Surface Imagery',
+        sourceUrl: 'https://images-api.nasa.gov/search?q=perseverance%20jezero',
+        resolution: 'Native Camera Frame',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'nasa-pds-search',
+        name: 'NASA Planetary Data System (PDS4) Registry',
+        provider: 'NASA PDS Engineering Node',
+        instrument: 'MRO HiRISE, CTX, CRISM, Mars 2020',
+        dataType: 'PDS4 Observational Metadata API',
+        sourceUrl: 'https://pds.nasa.gov/api/search/1/products',
+        resolution: '0.25 m/px (HiRISE) to 6 m/px (CTX)',
+        classification: 'REAL DATA',
+        availability: 'Connected'
+      },
+      {
+        id: 'mola-megdr-transect',
+        name: 'Jezero Crater MOLA Basin Transect & Horn Slope Profile',
+        provider: 'NASA GSFC MOLA / USGS Topographic Reference',
+        instrument: 'MGS MOLA (Derived Cross-Section)',
+        dataType: 'Topographic & Finite-Difference Slope Series',
+        sourceUrl: 'https://astrogeology.usgs.gov/',
+        resolution: '463 m horizontal / ~1 m vertical',
+        classification: 'DERIVED',
+        availability: 'Connected'
+      }
+    ];
+
+    const MAP_LAYERS = [
+      {
+        id: 'themis-ir-day',
+        datasetId: 'trek-themis-ir-day',
+        shortName: 'THEMIS Day IR',
+        title: 'THEMIS Daytime Infrared Mosaic v12',
+        trekLayerId: 'Mars_MO_THEMIS-IR-Day_mosaic_global_100m_v12',
+        format: 'png',
+        resolutionLabel: '100 m/px',
+        attribution: 'ASU / NASA / JPL Mars Trek (Odyssey THEMIS)',
+        coverageNote: '100 m/px 12.57 µm thermal IR mosaic; sharply resolves Jezero western delta fan and crater rim.',
+        legendGradient: ['#090D14', '#334155', '#64748B', '#CBD5E1', '#F8FAFC'],
+        legendMin: 'Cool / Fine Dust',
+        legendMax: 'Warm / Exposed Bedrock'
+      },
+      {
+        id: 'viking-color',
+        datasetId: 'trek-viking-mdim21',
+        shortName: 'Viking Visible',
+        title: 'Viking Global Color Mosaic (MDIM 2.1)',
+        trekLayerId: 'Mars_Viking_MDIM21_ClrMosaic_global_232m',
+        format: 'jpg',
+        resolutionLabel: '232 m/px',
+        attribution: 'NASA / JPL / USGS Astrogeology (Viking MDIM 2.1)',
+        coverageNote: 'True-color balanced global mosaic resolving regional albedo across Syrtis Major and Jezero.',
+        legendGradient: ['#3b251c', '#7c4732', '#b86f4c', '#d89b72', '#f1cdb0'],
+        legendMin: 'Low Albedo Basalt',
+        legendMax: 'High Albedo Dust'
+      },
+      {
+        id: 'mola-color-hillshade',
+        datasetId: 'trek-mola-clrshade',
+        shortName: 'MOLA Hypsometric',
+        title: 'MOLA Colorized Elevation Hillshade',
+        trekLayerId: 'Mars_MGS_MOLA_ClrShade_merge_global_463m',
+        format: 'jpg',
+        resolutionLabel: '463 m/px',
+        attribution: 'NASA / GSFC / JPL Mars Trek (MGS MOLA)',
+        coverageNote: 'Laser altimetry relief; Jezero basin floor lies ~2,569 m below the Mars aeroid datum.',
+        legendGradient: ['#1E3A8A', '#0284C7', '#10B981', '#EAB308', '#E06D4B', '#F8FAFC'],
+        legendMin: '-8,200 m',
+        legendMax: '+21,200 m'
+      },
+      {
+        id: 'mola-grayscale-shade',
+        datasetId: 'trek-mola-shade',
+        shortName: 'MOLA Hillshade',
+        title: 'MOLA Grayscale Structural Relief',
+        trekLayerId: 'Mars_MGS_MOLA_Shade_global_463m',
+        format: 'jpg',
+        resolutionLabel: '463 m/px',
+        attribution: 'NASA / GSFC / JPL Mars Trek (MGS MOLA)',
+        coverageNote: 'Monochrome directional hillshade emphasizing crater rims, wrinkle ridges, and valley incisions.',
+        legendGradient: ['#0F172A', '#475569', '#94A3B8', '#E2E8F0'],
+        legendMin: 'Shadowed Scarp',
+        legendMax: 'Illuminated Slope'
+      }
+    ];
+
+    const VERIFIED_SITES = [
+      {
+        id: 'site-perseverance-landing',
+        name: 'Octavia E. Butler Landing Site',
+        code: 'M20-LOC-01',
+        formation: 'Máaz Formation (Cf-fr)',
+        category: 'Landing Site',
+        lat: 18.4447,
+        lon: 77.4508,
+        elevationM: -2569,
+        description: 'Touchdown point of NASA Mars 2020 Perseverance rover on February 18, 2021 (Sol 0), ~2 km southeast of the western Jezero delta scarp.',
+        geologicalContext: 'Pyroxene- and olivine-bearing basaltic floor unit exhibiting vesicular and crater-retaining fractured bedrock.',
+        source: 'NASA/JPL-Caltech Mars 2020 Mission',
+        sourceUrl: 'https://science.nasa.gov/mission/mars-2020-perseverance/'
+      },
+      {
+        id: 'site-wright-brothers',
+        name: 'Wright Brothers Field (Ingenuity)',
+        code: 'M20-LOC-02',
+        formation: 'Máaz Regolith Plain',
+        category: 'Mission Milestone',
+        lat: 18.4449,
+        lon: 77.4511,
+        elevationM: -2569,
+        description: 'Airfield where the Ingenuity Mars Helicopter completed the first powered, controlled flight on another planet on April 19, 2021.',
+        geologicalContext: 'Level pebble-rich regolith veneer overlying fractured basaltic crater floor units.',
+        source: 'NASA/JPL Ingenuity Flight Log',
+        sourceUrl: 'https://science.nasa.gov/mission/mars-2020-perseverance/'
+      },
+      {
+        id: 'site-seitah',
+        name: 'South Séítah (Bastide / Brac)',
+        code: 'M20-GEO-03',
+        formation: 'Séítah Olivine Cumulate',
+        category: 'Geological Unit',
+        lat: 18.4360,
+        lon: 77.4420,
+        elevationM: -2574,
+        description: 'Stratigraphically oldest exposed unit on the Jezero floor, sampled during Perseverance Campaign 1.',
+        geologicalContext: 'Coarse-grained olivine cumulate igneous rock with magnesium-iron carbonate and sulfate aqueous alteration.',
+        source: 'Mars 2020 Science Team (Farley et al., 2022)',
+        sourceUrl: 'https://pds.nasa.gov/'
+      },
+      {
+        id: 'site-kodiak',
+        name: 'Kodiak Butte (Delta Remnant)',
+        code: 'M20-DEL-04',
+        formation: 'Western Delta Clinoforms',
+        category: 'Delta Feature',
+        lat: 18.4580,
+        lon: 77.4020,
+        elevationM: -2525,
+        description: 'Erosional outlier (~250 m long) preserving classic Gilbert-type lacustrine delta stratigraphy.',
+        geologicalContext: 'Steeply dipping foreset beds (~15–20°) truncated by horizontal topset conglomerates, proving ancient lake levels and late-stage boulder floods.',
+        source: 'Mars 2020 Science Team (Mangold et al., 2021)',
+        sourceUrl: 'https://science.nasa.gov/mission/mars-2020-perseverance/'
+      },
+      {
+        id: 'site-three-forks',
+        name: 'Three Forks Sample Depot',
+        code: 'M20-DEP-05',
+        formation: 'Delta Apron Contact',
+        category: 'Mission Milestone',
+        lat: 18.4660,
+        lon: 77.4290,
+        elevationM: -2555,
+        description: 'Contingency depot where Perseverance placed 10 titanium sample tubes in a survey-grade zigzag pattern (Dec 2022 – Jan 2023).',
+        geologicalContext: 'Low-slope regolith flat immediately below Cape Nukshak and Hawksbill Gap sedimentary scarps.',
+        source: 'NASA/JPL Mars Sample Return',
+        sourceUrl: 'https://science.nasa.gov/mission/mars-2020-perseverance/'
+      },
+      {
+        id: 'site-neretva',
+        name: 'Neretva Vallis Inlet Breach',
+        code: 'M20-VAL-06',
+        formation: 'Noachian Rim / Fluvial Channel',
+        category: 'Delta Feature',
+        lat: 18.4850,
+        lon: 77.3850,
+        elevationM: -2460,
+        description: 'Primary inflow channel breaching the western Jezero Crater rim, supplying water and sediment to paleolake Jezero.',
+        geologicalContext: 'Incised bedrock gorge cutting through Noachian phyllosilicate- and carbonate-bearing basement crust.',
+        source: 'USGS Astrogeology / IAU Planetary Gazetteer',
+        sourceUrl: 'https://astrogeology.usgs.gov/'
+      }
+    ];
+
+    /**
+     * Global 3D Mars Landmarks for the Three.js Planetary Globe Locator
+     */
+    const GLOBAL_MARS_LANDMARKS = [
+      {
+        id: 'globe-jezero',
+        name: 'Jezero Crater (Perseverance)',
+        mission: 'Mars 2020 Rover & Ingenuity',
+        lat: 18.38,
+        lon: 77.58,
+        elevationM: -2569,
+        quadrangle: 'Syrtis Major (MC-13)',
+        color: '#E06D4B',
+        summary: 'Primary AREION ROI: 45 km Noachian paleolake basin preserving western fan-delta clinoforms, Mg-carbonates, and olivine cumulates.',
+        zoomTarget: 9.5
+      },
+      {
+        id: 'globe-gale',
+        name: 'Gale Crater / Aeolis Mons',
+        mission: 'Mars Science Laboratory (Curiosity)',
+        lat: -5.40,
+        lon: 137.80,
+        elevationM: -4500,
+        quadrangle: 'Aeolis (MC-23)',
+        color: '#4CC38A',
+        summary: '154 km impact basin with a 5.5 km central stratified mound (Mount Sharp) recording transitions from clay-bearing lacustrine mudstones to sulfates.',
+        zoomTarget: 7.5
+      },
+      {
+        id: 'globe-olympus',
+        name: 'Olympus Mons Caldera',
+        mission: 'Orbital Reference Landmark',
+        lat: 18.65,
+        lon: -133.80,
+        elevationM: 21229,
+        quadrangle: 'Tharsis (MC-09)',
+        color: '#D49B6A',
+        summary: 'Largest shield volcano in the Solar System (~600 km diameter, +21.2 km above Mars aeroid) bounded by a 6–8 km basal scarp.',
+        zoomTarget: 6.0
+      },
+      {
+        id: 'globe-valles',
+        name: 'Valles Marineris (Coprates)',
+        mission: 'Orbital Tectonic Canyon System',
+        lat: -13.90,
+        lon: -60.80,
+        elevationM: -7000,
+        quadrangle: 'Coprates (MC-18)',
+        color: '#E5A952',
+        summary: '4,000 km tectonic rift system reaching depths of 7–10 km below surrounding Hesperian plateaus, exposing deep crustal layering.',
+        zoomTarget: 5.5
+      },
+      {
+        id: 'globe-hellas',
+        name: 'Hellas Planitia Basin',
+        mission: 'Deepest Martian Impact Basin',
+        lat: -42.40,
+        lon: 70.50,
+        elevationM: -8200,
+        quadrangle: 'Hellas (MC-28)',
+        color: '#60A5FA',
+        summary: '2,300 km Noachian impact structure containing the lowest surface elevation on Mars (-8,200 m below aeroid datum).',
+        zoomTarget: 5.0
+      },
+      {
+        id: 'globe-elysium',
+        name: 'Elysium Planitia (InSight)',
+        mission: 'NASA InSight Geophysical Lander',
+        lat: 4.50,
+        lon: 135.62,
+        elevationM: -2655,
+        quadrangle: 'Elysium (MC-15)',
+        color: '#A78BFA',
+        summary: 'Smooth Hesperian-Amazonian volcanic plains where InSight deployed the SEIS seismometer to measure marsquakes and core radius.',
+        zoomTarget: 7.5
+      }
+    ];
+
+    /**
+     * Verified Mars 2020 Mastcam-Z Multispectral Filter Wheel Specifications
+     * Source: Bell et al. (2021) Space Sci. Rev. 217:24; Rice et al. (2023) JGR Planets
+     */
+    const MASTCAMZ_FILTERS = [
+      { code: 'L6', eye: 'Left', wl: 442, hwhm: 12, color: '#3B82F6', diagnostic: 'Blue/UV Fe3+->O2- charge-transfer edge; frost & atmospheric haze' },
+      { code: 'L0-B', eye: 'Left/Right', wl: 471, hwhm: 45, color: '#60A5FA', diagnostic: 'Broadband Bayer Blue human-vision channel' },
+      { code: 'L5', eye: 'Left', wl: 528, hwhm: 11, color: '#10B981', diagnostic: 'Green ferric absorption band shoulder (~530 nm)' },
+      { code: 'L0-G', eye: 'Left/Right', wl: 546, hwhm: 42, color: '#34D399', diagnostic: 'Broadband Bayer Green human-vision channel' },
+      { code: 'L4', eye: 'Left', wl: 605, hwhm: 9, color: '#F59E0B', diagnostic: 'New Mastcam-Z band: local reflectance maximum of ferric oxides/oxyhydroxides' },
+      { code: 'L0-R', eye: 'Left/Right', wl: 638, hwhm: 43, color: '#EF4444', diagnostic: 'Broadband Bayer Red human-vision channel' },
+      { code: 'L3', eye: 'Left', wl: 677, hwhm: 11, color: '#DC2626', diagnostic: 'Ferric oxyhydroxide band & red ferric slope anchor' },
+      { code: 'L2', eye: 'Left', wl: 754, hwhm: 10, color: '#B91C1C', diagnostic: 'Peak visible/NIR continuum anchor prior to 1-um mafic band' },
+      { code: 'L1/R1', eye: 'Stereo Tie', wl: 800, hwhm: 9, color: '#991B1B', diagnostic: 'Left/Right camera cross-calibration tie point (800 nm)' },
+      { code: 'R2', eye: 'Right', wl: 866, hwhm: 10, color: '#A855F7', diagnostic: 'Crystalline hematite Fe3+ electronic transition minimum (~860 nm)' },
+      { code: 'R3', eye: 'Right', wl: 910, hwhm: 12, color: '#9333EA', diagnostic: 'Low-Ca orthopyroxene & goethite Fe absorption band center' },
+      { code: 'R4', eye: 'Right', wl: 939, hwhm: 12, color: '#7E22CE', diagnostic: 'Clinopyroxene / ferric phase shoulder reference' },
+      { code: 'R5', eye: 'Right', wl: 978, hwhm: 10, color: '#6366F1', diagnostic: 'New Mastcam-Z band: narrow H2O / OH hydration overtone absorption' },
+      { code: 'R6', eye: 'Right', wl: 1022, hwhm: 19, color: '#4F46E5', diagnostic: 'Olivine & high-Ca pyroxene Fe2+ crystal-field absorption (~1000+ nm)' }
+    ];
+
+    /**
+     * Representative Relative Reflectance (R*) Spectra for 4 Jezero Crater Endmembers
+     * across the 14 Mastcam-Z filter wavelengths (442 nm to 1022 nm)
+     * Grounded in Rice et al. (2023) JGR Planets & Bell et al. (2021)
+     */
+    const JEZERO_SPECTRAL_ENDMEMBERS = [
+      {
+        id: 'seitah-olivine',
+        name: 'Séítah Olivine Cumulate (Brac/Dourbes)',
+        unit: 'Séítah Formation',
+        stroke: '#4CC38A',
+        note: 'Strong, broad Fe2+ crystal-field absorption dropping steadily from 677 nm into a deep minimum at 1022 nm (R6).',
+        // R* values ordered matching MASTCAMZ_FILTERS [442, 471, 528, 546, 605, 638, 677, 754, 800, 866, 910, 939, 978, 1022]
+        rStar: [0.065, 0.074, 0.105, 0.114, 0.142, 0.151, 0.156, 0.144, 0.131, 0.112, 0.098, 0.091, 0.084, 0.076]
+      },
+      {
+        id: 'maaz-pyroxene',
+        name: 'Máaz Basaltic Outcrop (Artuby/Rochette)',
+        unit: 'Máaz Formation',
+        stroke: '#E06D4B',
+        note: 'Pyroxene-bearing basaltic rock showing a diagnostic absorption trough centered near 910–939 nm (R3/R4) with slight recovery at 1022 nm.',
+        rStar: [0.072, 0.082, 0.112, 0.122, 0.162, 0.176, 0.188, 0.182, 0.168, 0.149, 0.136, 0.134, 0.139, 0.145]
+      },
+      {
+        id: 'delta-hydrated',
+        name: 'Western Delta Hydrated Smectite / Sulfate',
+        unit: 'Hawksbill Gap / Kodiak',
+        stroke: '#60A5FA',
+        note: 'Elevated 605–754 nm reflectance with a localized 978 nm (R5) H2O/OH hydration absorption dip.',
+        rStar: [0.084, 0.096, 0.138, 0.152, 0.208, 0.226, 0.242, 0.251, 0.246, 0.238, 0.232, 0.228, 0.204, 0.224]
+      },
+      {
+        id: 'ferric-dust',
+        name: 'Bright Ferric Airfall Dust Veneer',
+        unit: 'Global / Crater Floor Regolith',
+        stroke: '#E5A952',
+        note: 'Steep red ferric charge-transfer slope from 442 nm (L6) to 754 nm (L2) and bright, nearly flat near-infrared continuum.',
+        rStar: [0.068, 0.085, 0.148, 0.172, 0.264, 0.298, 0.328, 0.352, 0.356, 0.351, 0.348, 0.349, 0.347, 0.350]
+      }
+    ];
+
+    const MASTCAMZ_COMPOSITE_PRESETS = [
+      {
+        id: 'true-bayer',
+        name: 'Broadband True Color (L0/R0 Bayer)',
+        rCode: 'L0-R',
+        gCode: 'L0-G',
+        bCode: 'L0-B',
+        rationale: 'Approximates human naked-eye vision through the IR-cutoff clear filter (638 / 546 / 471 nm).'
+      },
+      {
+        id: 'enhanced-visible',
+        name: 'Enhanced Visible / DCS (L2 / L5 / L6)',
+        rCode: 'L2',
+        gCode: 'L5',
+        bCode: 'L6',
+        rationale: 'Standard Mars 2020 science false-color (754 / 528 / 442 nm) emphasizing ferric oxidation differences and dust-free basaltic surfaces.'
+      },
+      {
+        id: 'nir-mafic',
+        name: 'NIR Mafic & Olivine Composite (R6 / R3 / R1)',
+        rCode: 'R6',
+        gCode: 'R3',
+        bCode: 'L1/R1',
+        rationale: 'Maps near-infrared bands (1022 / 910 / 800 nm) to RGB so olivine-rich Séítah cumulates appear deep cyan/blue due to strong 1022 nm absorption.'
+      },
+      {
+        id: 'hydration-ferric',
+        name: 'Hydration & Fe-Oxide Diagnostic (R4 / R5 / L4)',
+        rCode: 'R4',
+        gCode: 'R5',
+        bCode: 'L4',
+        rationale: 'Combines the 939 nm continuum, 978 nm H2O/OH absorption band, and 605 nm ferric peak to isolate hydrated alteration veins.'
+      }
+    ];
+
+    const TRANSECTS = [
+      {
+        id: 'west-east-basin',
+        name: 'West-to-East Jezero Basin Profile (18.45°N)',
+        description: 'Spans 45.5 km from the Western Rim Crest across Neretva Delta, Perseverance Landing Site, and Central Basin to the Eastern Rim.',
+        samples: [
+          { distanceKm: 0.0, lon: 77.12, lat: 18.45, elevationM: -2140, zone: 'Western Rim Crest' },
+          { distanceKm: 4.5, lon: 77.20, lat: 18.45, elevationM: -2295, zone: 'Upper Western Wall' },
+          { distanceKm: 9.0, lon: 77.28, lat: 18.45, elevationM: -2410, zone: 'Neretva Inlet Bench' },
+          { distanceKm: 13.5, lon: 77.36, lat: 18.45, elevationM: -2485, zone: 'Upper Delta Plain' },
+          { distanceKm: 17.5, lon: 77.42, lat: 18.45, elevationM: -2552, zone: 'Delta Front Scarp' },
+          { distanceKm: 20.0, lon: 77.45, lat: 18.45, elevationM: -2569, zone: 'Octavia E. Butler / Máaz' },
+          { distanceKm: 25.0, lon: 77.54, lat: 18.45, elevationM: -2576, zone: 'Central Crater Floor' },
+          { distanceKm: 30.5, lon: 77.64, lat: 18.45, elevationM: -2572, zone: 'Eastern Basin Plain' },
+          { distanceKm: 36.0, lon: 77.74, lat: 18.45, elevationM: -2540, zone: 'Lower Eastern Slopes' },
+          { distanceKm: 41.0, lon: 77.83, lat: 18.45, elevationM: -2360, zone: 'Eastern Crater Wall' },
+          { distanceKm: 45.5, lon: 77.91, lat: 18.45, elevationM: -2195, zone: 'Eastern Rim Crest' }
+        ]
+      },
+      {
+        id: 'delta-to-floor',
+        name: 'Kodiak Butte to South Séítah Traverse Profile',
+        description: 'Regional MOLA elevation drop from the western delta margin across Artuby Ridge into South Séítah.',
+        samples: [
+          { distanceKm: 0.0, lon: 77.390, lat: 18.470, elevationM: -2475, zone: 'Main Delta Margin' },
+          { distanceKm: 1.2, lon: 77.402, lat: 18.458, elevationM: -2525, zone: 'Kodiak Butte Base' },
+          { distanceKm: 2.5, lon: 77.420, lat: 18.450, elevationM: -2558, zone: 'Artuby Ridge Contact' },
+          { distanceKm: 3.8, lon: 77.442, lat: 18.436, elevationM: -2574, zone: 'South Séítah Basin' },
+          { distanceKm: 5.1, lon: 77.451, lat: 18.445, elevationM: -2569, zone: 'Octavia E. Butler Site' }
+        ]
+      }
+    ];
+
+    /********************************************************************
+     * 3. CENTRALIZED STATE & AUDIT LOG
+     ********************************************************************/
+    const STORAGE_KEY = 'areion_observations_v3';
+
+    const state = {
+      activeModule: 'overview',
+      explorerViewMode: '2d-wmts', // '2d-wmts' | '3d-globe'
+      selectedGlobeLandmarkId: GLOBAL_MARS_LANDMARKS[0].id,
+      globeAutoRotate: true,
+      globeShowTilt: true,
+      baseLayerId: 'themis-ir-day',
+      overlayLayerId: 'viking-color',
+      overlayOpacity: 0.45,
+      selectedSiteId: VERIFIED_SITES[0].id,
+      showGraticule: true,
+      showUserMarkers: true,
+      showReticle: true,
+      selectedTransectId: TRANSECTS[0].id,
+      inspectedStationIdx: 5,
+      scienceLabMode: 'mastcamz', // 'mastcamz' | 'scatter' | 'pds'
+      mastcamPresetId: 'enhanced-visible',
+      mastcamRedCode: 'L2',
+      mastcamGreenCode: 'L5',
+      mastcamBlueCode: 'L6',
+      mastcamSelectedEndmemberId: 'seitah-olivine',
+      pdsQuery: 'jezero',
+      pdsProducts: [],
+      pdsLoading: false,
+      pdsError: null,
+      imageQuery: 'perseverance jezero crater',
+      imageJezeroOnly: false,
+      imageItems: [],
+      imageLoading: false,
+      imageError: null,
+      waypoints: [
+        { id: 'wp-1', label: VERIFIED_SITES[0].name, lat: VERIFIED_SITES[0].lat, lon: VERIFIED_SITES[0].lon },
+        { id: 'wp-2', label: VERIFIED_SITES[4].name, lat: VERIFIED_SITES[4].lat, lon: VERIFIED_SITES[4].lon },
+        { id: 'wp-3', label: VERIFIED_SITES[3].name, lat: VERIFIED_SITES[3].lat, lon: VERIFIED_SITES[3].lon }
+      ],
+      observations: loadStoredObservations(),
+      activityLog: [
+        {
+          timestamp: new Date().toISOString(),
+          source: 'AREION Ephemeris & 3D/VNIR Kernel',
+          endpoint: 'local://mars2000-webgl-mastcamz',
+          status: 'SUCCESS',
+          detail: 'Initialized IAU Mars 2000 3D Globe Locator and 14-channel Mastcam-Z VNIR spectral matrix.'
+        }
+      ]
+    };
+
+    function loadStoredObservations() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return [
+        {
+          id: 'obs-seed-1',
+          title: 'Cross-bedded sandstone lens near Hawksbill Gap',
+          locationName: 'Western Delta Front Lower Bench',
+          latitude: 18.4615,
+          longitude: 77.4235,
+          surfaceMaterial: 'Sedimentary',
+          visibleTexture: 'Layered',
+          surfaceColour: 'Warm ferric ochre / dusty tan',
+          geologicalInterpretation: 'Fluvial-deltaic distributary channel bar deposit indicating sustained paleolake inflow.',
+          observationDate: '2026-11-15'
+        }
+      ];
+    }
+
+    function saveObservations() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.observations));
+      } catch (e) {}
+    }
+
+    function logEvent(source, endpoint, status, detail) {
+      const now = new Date().toISOString();
+      state.activityLog.unshift({ timestamp: now, source, endpoint, status, detail });
+      state.activityLog = state.activityLog.slice(0, 25);
+      const syncEl = document.getElementById('headerLastSync');
+      if (syncEl) syncEl.textContent = now.replace('T', ' ').slice(0, 19) + 'Z';
+    }
+
+    /********************************************************************
+     * 4. NAVIGATION & SHELL INITIALIZATION
+     ********************************************************************/
+    const MODULES = [
+      { id: 'overview', code: '01', label: 'Mission Overview', sub: 'Registry & Ephemeris', icon: 'compass' },
+      { id: 'explorer', code: '02', label: 'Mars Explorer', sub: '2D WMTS + 3D Globe', icon: 'globe' },
+      { id: 'terrain', code: '03', label: 'Terrain Analysis', sub: 'MOLA & Horn Slope', icon: 'mountain' },
+      { id: 'sciencelab', code: '04', label: 'Science Lab', sub: 'Mastcam-Z & PDS4', icon: 'flask-conical' },
+      { id: 'routes', code: '05', label: 'Route Explorer', sub: 'Geodesic Traverse', icon: 'route' },
+      { id: 'images', code: '06', label: 'Image Explorer', sub: 'NASA Media Archive', icon: 'image' },
+      { id: 'observations', code: '07', label: 'Field Notebook', sub: 'Local Lithology Log', icon: 'clipboard-list' }
+    ];
+
+    let olMapInstance = null;
+    let threeGlobeCleanup = null;
+
+    function cleanupActiveViewports() {
+      if (olMapInstance) {
+        olMapInstance.setTarget(null);
+        olMapInstance = null;
+      }
+      if (typeof threeGlobeCleanup === 'function') {
+        threeGlobeCleanup();
+        threeGlobeCleanup = null;
+      }
+    }
+
+    function renderSidebarNav() {
+      const container = document.getElementById('navButtonsContainer');
+      container.innerHTML = MODULES.map(m => {
+        const active = state.activeModule === m.id;
+        return `
+          <button
+            onclick="switchModule('${m.id}')"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all border ${
+              active
+                ? 'bg-gradient-to-r from-mars-accent/20 to-mars-elevated border-mars-accent/70 text-mars-text shadow-md'
+                : 'border-transparent text-mars-muted hover:text-mars-text hover:bg-mars-panel/70'
+            }"
+          >
+            <span class="font-mono text-[10px] px-1.5 py-0.5 rounded ${active ? 'bg-mars-accent text-mars-void font-bold' : 'bg-mars-void text-mars-muted'}">${m.code}</span>
+            <i data-lucide="${m.icon}" class="w-4 h-4 ${active ? 'text-mars-accent' : 'text-mars-muted'}"></i>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs font-medium truncate">${m.label}</div>
+              <div class="text-[10px] font-mono text-mars-muted truncate">${m.sub}</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function switchModule(moduleId, focusCoord = null) {
+      cleanupActiveViewports();
+      state.activeModule = moduleId;
+      renderSidebarNav();
+      renderActiveModule(focusCoord);
+      document.getElementById('sidebarNav').classList.add('hidden');
+    }
+
+    function renderActiveModule(focusCoord = null) {
+      cleanupActiveViewports();
+      const container = document.getElementById('moduleContainer');
+      switch (state.activeModule) {
+        case 'overview': renderOverviewModule(container); break;
+        case 'explorer': renderExplorerModule(container, focusCoord); break;
+        case 'terrain': renderTerrainModule(container); break;
+        case 'sciencelab': renderScienceLabModule(container); break;
+        case 'routes': renderRouteExplorerModule(container); break;
+        case 'images': renderImageExplorerModule(container); break;
+        case 'observations': renderObservationsModule(container); break;
+      }
+      lucide.createIcons();
+    }
+
+    /********************************************************************
+     * 5. MODULE 01: OVERVIEW
+     ********************************************************************/
+    function renderOverviewModule(container) {
+      const eph = computeMarsEphemeris();
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-6 overflow-hidden relative">
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-center">
+            <div class="xl:col-span-2 space-y-3">
+              <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-mars-accent/15 border border-mars-accent/40 text-mars-accent font-mono text-[11px]">
+                <span class="w-2 h-2 rounded-full bg-mars-accent animate-ping"></span>
+                MODULE 01 // MARS 2020 JEZERO CRATER RESEARCH WORKSTATION
+              </div>
+              <h1 class="font-display text-2xl sm:text-3xl font-bold text-mars-text tracking-tight">
+                AREION: Martian Surface Explorer &amp; Spectral Workstation
+              </h1>
+              <p class="text-sm text-mars-muted leading-relaxed max-w-3xl">
+                An interactive planetary science platform uniting a <strong class="text-mars-text">3D WebGL Mars Globe Locator</strong>, multi-spectral <strong class="text-mars-text">NASA Mars Trek WMTS</strong> orbital mapping, a <strong class="text-mars-text">14-channel Mastcam-Z VNIR Filter Simulator</strong>, and live <strong class="text-mars-text">NASA Image &amp; PDS4</strong> archives.
+              </p>
+
+              <div class="pt-2 flex flex-wrap gap-3">
+                <button
+                  onclick="state.explorerViewMode = '3d-globe'; switchModule('explorer');"
+                  class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-mars-accent hover:bg-[#cc5c3b] text-mars-void font-display font-semibold text-xs transition shadow-lg shadow-mars-accent/20"
+                >
+                  <i data-lucide="globe" class="w-4 h-4"></i>
+                  Open 3D Mars Globe Locator
+                </button>
+                <button
+                  onclick="state.scienceLabMode = 'mastcamz'; switchModule('sciencelab');"
+                  class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-mars-elevated hover:bg-mars-border border border-mars-accent/50 text-mars-text font-mono text-xs transition"
+                >
+                  <i data-lucide="aperture" class="w-4 h-4 text-mars-ochre"></i>
+                  Launch Mastcam-Z Filter Lab
+                </button>
+                <button
+                  id="verifyEndpointsBtn"
+                  onclick="probeAllTrekLayers()"
+                  class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-mars-panel hover:bg-mars-elevated border border-mars-border text-mars-muted hover:text-mars-text font-mono text-xs transition"
+                >
+                  <i data-lucide="radio" class="w-4 h-4 text-mars-success"></i>
+                  Verify Live NASA WMTS Tiles
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-lg bg-mars-void/90 border border-mars-border p-4 space-y-3 font-mono">
+              <div class="flex items-center justify-between border-b border-mars-border pb-2">
+                <span class="text-[11px] text-mars-ochre uppercase">Astronomical Ephemeris</span>
+                ${provenanceBadgeHtml('DERIVED', 'NASA GISS Mars24 Algorithm')}
+              </div>
+              <div class="grid grid-cols-2 gap-2.5 text-xs">
+                <div class="p-2.5 rounded bg-mars-panel border border-mars-border">
+                  <div class="text-[10px] text-mars-muted">PERSEVERANCE SOL</div>
+                  <div class="text-lg font-bold text-mars-accent mt-0.5">SOL ${eph.perseveranceSol}</div>
+                </div>
+                <div class="p-2.5 rounded bg-mars-panel border border-mars-border">
+                  <div class="text-[10px] text-mars-muted">MARS COORDINATED (MTC)</div>
+                  <div class="text-lg font-bold text-mars-text mt-0.5">${eph.mtc}</div>
+                </div>
+                <div class="p-2.5 rounded bg-mars-panel border border-mars-border">
+                  <div class="text-[10px] text-mars-muted">MARS SOL DATE (MSD)</div>
+                  <div class="text-sm font-semibold text-mars-ochre mt-0.5">${eph.msd}</div>
+                </div>
+                <div class="p-2.5 rounded bg-mars-panel border border-mars-border">
+                  <div class="text-[10px] text-mars-muted">MASTCAM-Z BANDS</div>
+                  <div class="text-sm font-semibold text-mars-success mt-0.5">442–1022 nm</div>
+                </div>
+              </div>
+              <div class="text-[10px] text-mars-muted leading-normal">
+                Computed from system UTC relative to Mars 2020 touchdown epoch (2021-02-18 20:55 UTC).
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dataset Inventory Table -->
+        <section class="hud-card rounded-xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-mars-border flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="font-display text-base font-semibold text-mars-text">Centralized Planetary Dataset Inventory</h2>
+              <p class="text-xs text-mars-muted">Authoritative NASA, ASU, and USGS services configured in AREION.</p>
+            </div>
+            <span class="font-mono text-xs text-mars-ochre">CRS: IAU Mars 2000 Equirectangular (EPSG:4326)</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-mars-void/90 border-b border-mars-border font-mono text-[11px] uppercase text-mars-muted">
+                  <th class="py-3 px-4">Dataset Name</th>
+                  <th class="py-3 px-4">Mission / Instrument</th>
+                  <th class="py-3 px-4">Product Type</th>
+                  <th class="py-3 px-4">Resolution</th>
+                  <th class="py-3 px-4">Provenance</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Endpoint</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-mars-border">
+                ${DATASETS.map(ds => `
+                  <tr class="hover:bg-mars-elevated/50 transition">
+                    <td class="py-3 px-4 font-medium text-mars-text">${ds.name}</td>
+                    <td class="py-3 px-4 text-mars-muted">${ds.instrument}</td>
+                    <td class="py-3 px-4 font-mono text-[11px] text-mars-text">${ds.dataType}</td>
+                    <td class="py-3 px-4 font-mono text-[11px] text-mars-ochre">${ds.resolution}</td>
+                    <td class="py-3 px-4">${provenanceBadgeHtml(ds.classification, ds.provider)}</td>
+                    <td class="py-3 px-4 font-mono text-[11px] text-mars-success">
+                      <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-current"></span>${ds.availability}</span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <a href="${ds.sourceUrl}" target="_blank" rel="noreferrer" class="font-mono text-[11px] text-mars-ochre hover:text-mars-accent">Verify Source ↗</a>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Audit Log -->
+        <section class="hud-card rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="font-display text-sm font-semibold text-mars-text">Live Data Retrieval &amp; Telemetry Audit Log</h2>
+              <p class="text-xs text-mars-muted">Real network tile probes and API requests executed during this workstation session.</p>
+            </div>
+            <span class="font-mono text-xs text-mars-muted">${state.activityLog.length} events</span>
+          </div>
+          <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+            ${state.activityLog.map(ev => `
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2 rounded bg-mars-void/80 border border-mars-border text-xs">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-2 h-2 rounded-full ${ev.status === 'ERROR' ? 'bg-mars-accent' : 'bg-mars-success'}"></span>
+                  <span class="font-mono font-semibold text-mars-text">${ev.source}</span>
+                  <span class="text-mars-muted">${ev.detail}</span>
+                </div>
+                <span class="font-mono text-[11px] text-mars-muted shrink-0">${ev.timestamp.replace('T', ' ').slice(0, 19)}Z</span>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    async function probeAllTrekLayers() {
+      const btn = document.getElementById('verifyEndpointsBtn');
+      if (btn) btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Probing NASA WMTS...`;
+      lucide.createIcons();
+
+      for (const layer of MAP_LAYERS) {
+        const tileUrl = `https://trek.nasa.gov/tiles/Mars/EQ/${layer.trekLayerId}/1.0.0/default/default028mm/6/25/91.${layer.format}`;
+        const t0 = performance.now();
+        try {
+          const res = await fetch(tileUrl);
+          const ms = Math.round(performance.now() - t0);
+          logEvent('NASA Mars Trek WMTS', tileUrl, res.ok ? 'SUCCESS' : 'ERROR',
+            `Jezero Crater tile z=6/25/91 (${layer.shortName}) HTTP ${res.status} in ${ms} ms.`);
+        } catch (err) {
+          logEvent('NASA Mars Trek WMTS', tileUrl, 'ERROR', `Network probe failed for ${layer.shortName}.`);
+        }
+      }
+      renderOverviewModule(document.getElementById('moduleContainer'));
+      lucide.createIcons();
+    }
+
+    /********************************************************************
+     * 6. MODULE 02: MARS EXPLORER (2D OPENLAYERS WMTS + 3D GLOBE LOCATOR)
+     ********************************************************************/
+    function createTrekSource(layer) {
+      const resolutions = [];
+      const matrixIds = [];
+      for (let z = 0; z <= 12; z++) {
+        resolutions.push(0.703125 / Math.pow(2, z));
+        matrixIds.push(String(z));
+      }
+      return new ol.source.WMTS({
+        url: `https://trek.nasa.gov/tiles/Mars/EQ/${layer.trekLayerId}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.${layer.format}`,
+        layer: layer.trekLayerId,
+        matrixSet: 'default028mm',
+        format: layer.format === 'png' ? 'image/png' : 'image/jpeg',
+        projection: 'EPSG:4326',
+        tileGrid: new ol.tilegrid.WMTS({
+          origin: [-180, 90],
+          resolutions,
+          matrixIds,
+          tileSize: 256
+        }),
+        style: 'default',
+        requestEncoding: 'REST',
+        attributions: layer.attribution,
+        crossOrigin: 'anonymous'
+      });
+    }
+
+    function renderExplorerModule(container, focusCoord = null) {
+      const is3D = state.explorerViewMode === '3d-globe';
+      const activeBase = MAP_LAYERS.find(l => l.id === state.baseLayerId) || MAP_LAYERS[0];
+      const selectedSite = VERIFIED_SITES.find(s => s.id === state.selectedSiteId) || VERIFIED_SITES[0];
+      const selectedGlobeLandmark = GLOBAL_MARS_LANDMARKS.find(g => g.id === state.selectedGlobeLandmarkId) || GLOBAL_MARS_LANDMARKS[0];
+
+      container.innerHTML = `
+        <!-- Top GIS & 3D Mode Switcher Bar -->
+        <div class="hud-card rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+              MODULE 02 // PLANETARY ORBITAL GIS &amp; 3D GLOBE LOCATOR
+            </div>
+            <h1 class="font-display text-lg font-bold text-mars-text">
+              ${is3D ? '3D Mars Planetary Globe Locator — Global Landmark Orientation' : '2D Mars Explorer — Jezero Crater Orbital WMTS Mosaics'}
+            </h1>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3 text-xs">
+            <!-- 2D / 3D Mode Toggle Pill -->
+            <div class="inline-flex rounded-lg p-1 bg-mars-void border border-mars-border font-mono">
+              <button
+                onclick="state.explorerViewMode = '2d-wmts'; renderActiveModule();"
+                class="px-3 py-1.5 rounded-md transition ${!is3D ? 'bg-mars-accent text-mars-void font-bold' : 'text-mars-muted hover:text-mars-text'}"
+              >
+                2D Regional WMTS
+              </button>
+              <button
+                onclick="state.explorerViewMode = '3d-globe'; renderActiveModule();"
+                class="px-3 py-1.5 rounded-md transition ${is3D ? 'bg-mars-accent text-mars-void font-bold' : 'text-mars-muted hover:text-mars-text'}"
+              >
+                3D Mars Globe Locator
+              </button>
+            </div>
+
+            ${!is3D ? `
+              <!-- 2D Layer Controls -->
+              <div class="flex items-center gap-2 bg-mars-void border border-mars-border rounded-lg px-3 py-1.5">
+                <span class="font-mono text-[11px] text-mars-muted">BASE:</span>
+                <select id="mapBaseSelect" class="bg-transparent text-mars-text font-medium focus:outline-none">
+                  ${MAP_LAYERS.map(l => `<option value="${l.id}" class="bg-mars-panel" ${l.id === state.baseLayerId ? 'selected' : ''}>${l.shortName} (${l.resolutionLabel})</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="flex items-center gap-2 bg-mars-void border border-mars-border rounded-lg px-3 py-1.5">
+                <span class="font-mono text-[11px] text-mars-muted">BLEND:</span>
+                <select id="mapOverlaySelect" class="bg-transparent text-mars-ochre font-medium focus:outline-none">
+                  <option value="none" class="bg-mars-panel" ${state.overlayLayerId === 'none' ? 'selected' : ''}>None</option>
+                  ${MAP_LAYERS.map(l => `<option value="${l.id}" class="bg-mars-panel" ${l.id === state.overlayLayerId ? 'selected' : ''}>${l.shortName}</option>`).join('')}
+                </select>
+                <input
+                  id="mapOpacitySlider"
+                  type="range" min="0" max="1" step="0.05" value="${state.overlayOpacity}"
+                  class="w-20 accent-mars-accent"
+                />
+              </div>
+
+              <button
+                id="resetMapBtn"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mars-elevated hover:bg-mars-border border border-mars-border text-mars-text font-mono text-xs"
+              >
+                <i data-lucide="locate-fixed" class="w-3.5 h-3.5 text-mars-accent"></i>
+                Center Jezero
+              </button>
+            ` : `
+              <!-- 3D Globe Controls -->
+              <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mars-void border border-mars-border font-mono cursor-pointer">
+                <input type="checkbox" ${state.globeAutoRotate ? 'checked' : ''} onchange="state.globeAutoRotate = this.checked;" class="accent-mars-accent" />
+                <span>Sidereal Spin</span>
+              </label>
+              <button
+                onclick="descendFromGlobeTo2D()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-mars-success text-mars-void font-mono font-bold text-xs"
+              >
+                <i data-lucide="arrow-down-right" class="w-3.5 h-3.5"></i>
+                Descend to 2D Map at Target
+              </button>
+            `}
+          </div>
+        </div>
+
+        ${is3D ? `
+          <!-- 3D WEBGL MARS GLOBE LOCATOR WORKSPACE -->
+          <div class="grid grid-cols-1 xl:grid-cols-4 gap-5">
+            <div class="xl:col-span-3 h-[600px] hud-card rounded-xl overflow-hidden relative bg-[#04070B]">
+              <div id="threeGlobeContainer" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+              <!-- Top Floating 3D Orbital Telemetry HUD -->
+              <div class="absolute top-3 left-3 right-3 pointer-events-none flex flex-wrap items-center justify-between gap-2">
+                <div class="bg-mars-void/90 backdrop-blur-md border border-mars-border rounded-lg px-3.5 py-2 font-mono text-[11px] flex items-center gap-4">
+                  <span class="text-mars-accent font-semibold">3D IAU MARS SPHERE</span>
+                  <span class="text-mars-text">OBLIQUITY: 25.19°</span>
+                  <span id="globeTextureStatus" class="text-mars-ochre">Synthesizing NASA Viking Global Mosaic...</span>
+                </div>
+                <div class="bg-mars-void/90 backdrop-blur-md border border-mars-border rounded-lg px-3 py-1.5 font-mono text-[11px] text-mars-muted">
+                  Drag to orbit • Scroll to zoom • Click landmark beacon in list to lock
+                </div>
+              </div>
+
+              <!-- Bottom Left Target Lock Readout -->
+              <div class="absolute bottom-3 left-3 bg-mars-void/92 backdrop-blur-md border border-mars-border rounded-lg p-3 font-mono text-xs space-y-1 pointer-events-none">
+                <div class="text-[10px] text-mars-muted uppercase">ORBITAL TARGET LOCK</div>
+                <div id="globeHudTargetName" class="text-sm font-bold text-mars-accent">${selectedGlobeLandmark.name}</div>
+                <div id="globeHudTargetCoords" class="text-[11px] text-mars-text">
+                  ${formatMarsCoords(selectedGlobeLandmark.lat, selectedGlobeLandmark.lon, 2)} | Elev: ${selectedGlobeLandmark.elevationM} m
+                </div>
+              </div>
+            </div>
+
+            <!-- Right 3D Planetary Landmark Selector & Dossier -->
+            <aside class="hud-card rounded-xl p-4 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between border-b border-mars-border pb-2.5">
+                  <span class="font-mono text-xs uppercase tracking-wider text-mars-ochre font-semibold">Global Mars Landmarks</span>
+                  ${provenanceBadgeHtml('REAL DATA', 'IAU / USGS')}
+                </div>
+
+                <div class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  ${GLOBAL_MARS_LANDMARKS.map(lm => {
+                    const active = lm.id === selectedGlobeLandmark.id;
+                    return `
+                      <button
+                        onclick="selectGlobeLandmark('${lm.id}')"
+                        class="w-full text-left p-2.5 rounded-lg border transition text-xs ${
+                          active
+                            ? 'bg-mars-elevated border-mars-accent text-mars-text'
+                            : 'bg-mars-void/70 border-mars-border text-mars-muted hover:text-mars-text'
+                        }"
+                      >
+                        <div class="flex items-center justify-between">
+                          <span class="inline-flex items-center gap-1.5 font-medium text-mars-text">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background:${lm.color}"></span>
+                            ${lm.name}
+                          </span>
+                        </div>
+                        <div class="font-mono text-[10px] text-mars-muted mt-0.5">
+                          ${formatMarsCoords(lm.lat, lm.lon, 2)} // ${lm.elevationM} m
+                        </div>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+
+                <!-- Selected Landmark Dossier -->
+                <div id="globeLandmarkDossier" class="p-3.5 rounded-lg bg-mars-void/90 border border-mars-border space-y-2.5 text-xs">
+                  ${renderGlobeLandmarkDossier(selectedGlobeLandmark)}
+                </div>
+              </div>
+            </aside>
+          </div>
+        ` : `
+          <!-- 2D OPENLAYERS WMTS WORKSPACE -->
+          <div class="grid grid-cols-1 xl:grid-cols-4 gap-5">
+            <div class="xl:col-span-3 h-[600px] hud-card rounded-xl overflow-hidden relative bg-mars-void">
+              <div id="olMapCanvas" class="w-full h-full"></div>
+
+              <!-- Top Floating Telemetry Ribbon -->
+              <div class="absolute top-3 left-3 right-3 pointer-events-none flex flex-wrap items-center justify-between gap-2">
+                <div class="bg-mars-void/90 backdrop-blur-md border border-mars-border rounded-lg px-3 py-1.5 font-mono text-[11px] flex items-center gap-3">
+                  <span class="text-mars-accent font-semibold">CRS: IAU MARS 2000</span>
+                  <span id="mapCursorReadout" class="text-mars-text">18.3800°N, 77.5800°E</span>
+                  <span id="mapZoomReadout" class="text-mars-ochre">Z9.0</span>
+                </div>
+
+                <div class="bg-mars-void/90 backdrop-blur-md border border-mars-border rounded-lg px-3 py-1.5 font-mono text-[11px] flex items-center gap-3">
+                  <span class="inline-flex items-center gap-1.5 text-mars-success">
+                    <span class="w-2 h-2 rounded-full bg-mars-success"></span>Verified Site
+                  </span>
+                  <span class="inline-flex items-center gap-1.5 text-mars-ochre">
+                    <span class="w-2 h-2 rounded-full bg-mars-ochre"></span>Field Note
+                  </span>
+                  <span class="inline-flex items-center gap-1.5 text-mars-warning">
+                    <span class="w-3 h-0.5 bg-mars-warning"></span>Route
+                  </span>
+                </div>
+              </div>
+
+              <!-- Center Orbital Reticle -->
+              <div id="mapCenterReticle" class="${state.showReticle ? '' : 'hidden'} pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div class="w-10 h-10 border border-mars-accent/40 rounded-full flex items-center justify-center">
+                  <div class="w-1.5 h-1.5 bg-mars-accent rounded-full"></div>
+                </div>
+              </div>
+
+              <!-- Bottom Left Mars Geodesic Scale Bar -->
+              <div class="absolute bottom-3 left-3 bg-mars-void/90 backdrop-blur-md border border-mars-border rounded-lg px-3 py-2 font-mono text-[11px] pointer-events-none space-y-1">
+                <div class="text-mars-muted text-[10px]">MARS SPHERE GEODESIC SCALE</div>
+                <div class="flex items-center gap-2">
+                  <div class="w-28 h-2 border-x-2 border-b-2 border-mars-accent"></div>
+                  <span id="mapScaleLabel" class="text-mars-text font-semibold">-- km</span>
+                </div>
+              </div>
+
+              <!-- Bottom Right Active Layer Legend Card -->
+              <div class="absolute bottom-3 right-3 bg-mars-void/92 backdrop-blur-md border border-mars-border rounded-lg p-3 max-w-xs text-xs space-y-1.5 pointer-events-none">
+                <div class="flex items-center justify-between gap-2">
+                  <span id="legendTitle" class="font-display font-semibold text-mars-text">${activeBase.shortName}</span>
+                  ${provenanceBadgeHtml('REAL DATA')}
+                </div>
+                <p id="legendDesc" class="text-[11px] text-mars-muted leading-snug">${activeBase.coverageNote}</p>
+                <div id="legendBar" class="h-2 rounded w-full" style="background: linear-gradient(to right, ${activeBase.legendGradient.join(', ')})"></div>
+                <div class="flex justify-between font-mono text-[10px] text-mars-muted">
+                  <span id="legendMin">${activeBase.legendMin}</span>
+                  <span id="legendMax">${activeBase.legendMax}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Verified Geological Site Dossier -->
+            <aside class="hud-card rounded-xl p-4 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between border-b border-mars-border pb-2.5">
+                  <span class="font-mono text-xs uppercase tracking-wider text-mars-ochre font-semibold">Verified Jezero Sites</span>
+                  <span class="font-mono text-[11px] text-mars-muted">${VERIFIED_SITES.length} Benchmark Pins</span>
+                </div>
+
+                <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  ${VERIFIED_SITES.map(s => {
+                    const isSel = s.id === selectedSite.id;
+                    return `
+                      <button
+                        onclick="selectExplorerSite('${s.id}')"
+                        class="w-full text-left p-2.5 rounded-lg border transition text-xs ${
+                          isSel
+                            ? 'bg-mars-elevated border-mars-accent text-mars-text'
+                            : 'bg-mars-void/70 border-mars-border text-mars-muted hover:text-mars-text'
+                        }"
+                      >
+                        <div class="flex items-center justify-between">
+                          <span class="font-mono text-[10px] text-mars-accent">${s.code}</span>
+                          <span class="font-mono text-[10px] text-mars-ochre">${s.elevationM} m</span>
+                        </div>
+                        <div class="font-medium text-mars-text truncate mt-0.5">${s.name}</div>
+                        <div class="font-mono text-[10px] text-mars-muted">${formatMarsCoords(s.lat, s.lon, 4)}</div>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+
+                <div id="siteDossierBox" class="p-3.5 rounded-lg bg-mars-void/90 border border-mars-border space-y-2.5 text-xs">
+                  ${renderSiteDossierInner(selectedSite)}
+                </div>
+              </div>
+            </aside>
+          </div>
+        `}
+      `;
+
+      if (is3D) {
+        initThreeMarsGlobe();
+      } else {
+        initOpenLayersMap(focusCoord);
+      }
+    }
+
+    function renderGlobeLandmarkDossier(lm) {
+      return `
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span class="font-mono text-[10px] text-mars-accent">${lm.quadrangle}</span>
+            <h3 class="font-display font-bold text-sm text-mars-text mt-0.5">${lm.name}</h3>
+          </div>
+          ${provenanceBadgeHtml('REAL DATA')}
+        </div>
+        <div class="p-2 rounded bg-mars-panel border border-mars-border font-mono text-[11px] space-y-0.5">
+          <div><span class="text-mars-muted">COORDS:</span> ${formatMarsCoords(lm.lat, lm.lon, 2)}</div>
+          <div><span class="text-mars-muted">AEROID ELEV:</span> <span class="text-mars-success">${lm.elevationM} m</span></div>
+          <div><span class="text-mars-muted">CONTEXT:</span> <span class="text-mars-ochre">${lm.mission}</span></div>
+        </div>
+        <p class="text-mars-text leading-relaxed">${lm.summary}</p>
+        <button
+          onclick="descendFromGlobeTo2D()"
+          class="w-full py-2 rounded-lg bg-mars-accent hover:bg-[#cc5c3b] text-mars-void font-display font-semibold text-xs transition"
+        >
+          Descend to 2D WMTS at ${lm.name.split(' ')[0]} ↗
+        </button>
+      `;
+    }
+
+    function descendFromGlobeTo2D() {
+      const lm = GLOBAL_MARS_LANDMARKS.find(g => g.id === state.selectedGlobeLandmarkId) || GLOBAL_MARS_LANDMARKS[0];
+      state.explorerViewMode = '2d-wmts';
+      renderActiveModule({ lat: lm.lat, lon: lm.lon, zoom: lm.zoomTarget || 9 });
+    }
+
+    /**
+     * Initializes the interactive Three.js 3D Mars Globe Locator
+     */
+    function initThreeMarsGlobe() {
+      const container = document.getElementById('threeGlobeContainer');
+      if (!container || typeof THREE === 'undefined') return;
+
+      const width = container.clientWidth || 800;
+      const height = container.clientHeight || 600;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000);
+      camera.position.set(0, 0.8, 3.6);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.58);
+      scene.add(ambientLight);
+      const sunLight = new THREE.DirectionalLight(0xffe6d5, 1.15);
+      sunLight.position.set(5, 3, 5);
+      scene.add(sunLight);
+
+      // Pivot group with Martian obliquity (25.19 deg)
+      const globeGroup = new THREE.Group();
+      scene.add(globeGroup);
+
+      // Build procedural high-detail Martian albedo/hypsometric canvas texture first,
+      // then asynchronously overlay live NASA Mars Trek Zoom-0/1 global WMTS tiles
+      const texCanvas = document.createElement('canvas');
+      texCanvas.width = 1024;
+      texCanvas.height = 512;
+      const ctx = texCanvas.getContext('2d');
+
+      // Base Martian ferric gradient + realistic albedo features (Syrtis Major, Tharsis, Hellas, Polar Caps)
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0.0, '#e8e4dc'); // North polar cap
+      grad.addColorStop(0.07, '#8c5339');
+      grad.addColorStop(0.32, '#c86f46');
+      grad.addColorStop(0.50, '#b35935');
+      grad.addColorStop(0.75, '#8a462b');
+      grad.addColorStop(0.93, '#723a24');
+      grad.addColorStop(1.0, '#ede8df'); // South polar cap
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 512);
+
+      // Dark low-albedo basaltic provinces (Syrtis Major near Jezero, Acidalia, Mare Erythraeum)
+      ctx.fillStyle = 'rgba(42, 26, 20, 0.45)';
+      ctx.beginPath(); ctx.ellipse(715, 215, 58, 75, 0.2, 0, Math.PI * 2); ctx.fill(); // Syrtis Major
+      ctx.beginPath(); ctx.ellipse(410, 130, 85, 55, -0.2, 0, Math.PI * 2); ctx.fill(); // Acidalia
+      ctx.beginPath(); ctx.ellipse(340, 310, 140, 40, 0.1, 0, Math.PI * 2); ctx.fill(); // Valles Marineris / Margaritifer
+      // Bright Hellas & Tharsis
+      ctx.fillStyle = 'rgba(235, 170, 120, 0.35)';
+      ctx.beginPath(); ctx.ellipse(712, 375, 65, 48, 0, 0, Math.PI * 2); ctx.fill(); // Hellas Basin
+      ctx.beginPath(); ctx.ellipse(165, 220, 95, 70, 0, 0, Math.PI * 2); ctx.fill(); // Tharsis Bulge
+
+      const marsTexture = new THREE.CanvasTexture(texCanvas);
+
+      // Attempt to stitch live NASA Mars Trek Zoom-1 Global Viking MDIM2.1 tiles onto the 3D sphere
+      let loadedTiles = 0;
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 4; col++) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            ctx.drawImage(img, col * 256, row * 256, 256, 256);
+            marsTexture.needsUpdate = true;
+            loadedTiles++;
+            const stEl = document.getElementById('globeTextureStatus');
+            if (stEl && loadedTiles === 8) {
+              stEl.textContent = 'Live NASA Viking MDIM 2.1 Global Mosaic Mapped';
+            }
+          };
+          img.src = `https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/1/${row}/${col}.jpg`;
+        }
+      }
+
+      // Mars Sphere Mesh
+      const sphereGeo = new THREE.SphereGeometry(1.35, 64, 64);
+      const sphereMat = new THREE.MeshStandardMaterial({
+        map: marsTexture,
+        roughness: 0.88,
+        metalness: 0.05
+      });
+      const marsMesh = new THREE.Mesh(sphereGeo, sphereMat);
+      globeGroup.add(marsMesh);
+
+      // Subtle Coordinate Graticule Wireframe Cage
+      const wireGeo = new THREE.SphereGeometry(1.356, 24, 12);
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x8C9DB5,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.11
+      });
+      globeGroup.add(new THREE.Mesh(wireGeo, wireMat));
+
+      // Equatorial Orbital Ring
+      const ringGeo = new THREE.RingGeometry(1.52, 1.535, 96);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xE06D4B,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.32
+      });
+      const eqRing = new THREE.Mesh(ringGeo, ringMat);
+      eqRing.rotation.x = Math.PI / 2;
+      globeGroup.add(eqRing);
+
+      // Convert planetocentric (lat, lon) to 3D Cartesian on sphere of radius R
+      function latLonToVector3(lat, lon, radius = 1.365) {
+        const phi = toRad(90 - lat);
+        const theta = toRad(lon + 180);
+        const x = -radius * Math.sin(phi) * Math.cos(theta);
+        const z = radius * Math.sin(phi) * Math.sin(theta);
+        const y = radius * Math.cos(phi);
+        return new THREE.Vector3(x, y, z);
+      }
+
+      // Plot 3D Landmark Beacons
+      const markerMeshes = {};
+      GLOBAL_MARS_LANDMARKS.forEach(lm => {
+        const pos = latLonToVector3(lm.lat, lm.lon, 1.37);
+        const pinGeo = new THREE.SphereGeometry(lm.id === 'globe-jezero' ? 0.038 : 0.028, 16, 16);
+        const pinMat = new THREE.MeshBasicMaterial({ color: lm.color });
+        const pin = new THREE.Mesh(pinGeo, pinMat);
+        pin.position.copy(pos);
+        globeGroup.add(pin);
+
+        // Outer halo ring on surface
+        const haloGeo = new THREE.RingGeometry(0.045, 0.062, 24);
+        const haloMat = new THREE.MeshBasicMaterial({ color: lm.color, side: THREE.DoubleSide });
+        const halo = new THREE.Mesh(haloGeo, haloMat);
+        halo.position.copy(latLonToVector3(lm.lat, lm.lon, 1.362));
+        halo.lookAt(new THREE.Vector3(0, 0, 0));
+        globeGroup.add(halo);
+
+        markerMeshes[lm.id] = { pin, halo, lm };
+      });
+
+      // Orient globe initially toward selected landmark (Jezero Crater: 18.38N, 77.58E)
+      let targetRotY = -toRad(77.58 + 90);
+      let targetRotX = toRad(18.38);
+      globeGroup.rotation.y = targetRotY;
+      globeGroup.rotation.x = targetRotX;
+
+      // Pointer drag & zoom interaction
+      let isDragging = false;
+      let prevX = 0, prevY = 0;
+
+      const onPointerDown = e => {
+        isDragging = true;
+        state.globeAutoRotate = false;
+        prevX = e.clientX;
+        prevY = e.clientY;
+      };
+      const onPointerMove = e => {
+        if (!isDragging) return;
+        const dx = e.clientX - prevX;
+        const dy = e.clientY - prevY;
+        prevX = e.clientX;
+        prevY = e.clientY;
+        targetRotY += dx * 0.006;
+        targetRotX = Math.max(-1.2, Math.min(1.2, targetRotX + dy * 0.006));
+      };
+      const onPointerUp = () => { isDragging = false; };
+      const onWheel = e => {
+        e.preventDefault();
+        camera.position.z = Math.max(2.1, Math.min(5.5, camera.position.z + e.deltaY * 0.002));
+      };
+
+      const domElem = renderer.domElement;
+      domElem.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      domElem.addEventListener('wheel', onWheel, { passive: false });
+
+      window.rotateGlobeToLandmark = (lm) => {
+        state.globeAutoRotate = false;
+        targetRotY = -toRad(lm.lon + 90);
+        targetRotX = toRad(lm.lat * 0.65);
+      };
+
+      let animFrameId = null;
+      function animate() {
+        animFrameId = requestAnimationFrame(animate);
+        if (state.globeAutoRotate && !isDragging) {
+          targetRotY += 0.0018;
+        }
+        globeGroup.rotation.y += (targetRotY - globeGroup.rotation.y) * 0.08;
+        globeGroup.rotation.x += (targetRotX - globeGroup.rotation.x) * 0.08;
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      threeGlobeCleanup = () => {
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        domElem.removeEventListener('pointerdown', onPointerDown);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        domElem.removeEventListener('wheel', onWheel);
+        renderer.dispose();
+      };
+    }
+
+    function selectGlobeLandmark(lmId) {
+      state.selectedGlobeLandmarkId = lmId;
+      const lm = GLOBAL_MARS_LANDMARKS.find(g => g.id === lmId);
+      if (!lm) return;
+      const dossierEl = document.getElementById('globeLandmarkDossier');
+      if (dossierEl) dossierEl.innerHTML = renderGlobeLandmarkDossier(lm);
+      const nameEl = document.getElementById('globeHudTargetName');
+      const coordsEl = document.getElementById('globeHudTargetCoords');
+      if (nameEl) nameEl.textContent = lm.name;
+      if (coordsEl) coordsEl.textContent = `${formatMarsCoords(lm.lat, lm.lon, 2)} | Elev: ${lm.elevationM} m`;
+      if (window.rotateGlobeToLandmark) window.rotateGlobeToLandmark(lm);
+    }
+
+    function renderSiteDossierInner(site) {
+      return `
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span class="font-mono text-[10px] text-mars-accent">${site.code} // ${site.category.toUpperCase()}</span>
+            <h3 class="font-display font-bold text-sm text-mars-text mt-0.5">${site.name}</h3>
+          </div>
+          ${provenanceBadgeHtml('REAL DATA')}
+        </div>
+        <div class="p-2 rounded bg-mars-panel border border-mars-border font-mono text-[11px] space-y-0.5">
+          <div><span class="text-mars-muted">COORDS:</span> ${formatMarsCoords(site.lat, site.lon, 4)}</div>
+          <div><span class="text-mars-muted">AEROID ELEV:</span> <span class="text-mars-success">${site.elevationM} m</span></div>
+          <div><span class="text-mars-muted">UNIT:</span> <span class="text-mars-ochre">${site.formation}</span></div>
+        </div>
+        <p class="text-mars-text leading-relaxed">${site.description}</p>
+        <div class="pt-2 border-t border-mars-border text-mars-muted leading-relaxed">
+          <strong class="text-mars-ochre">Stratigraphy &amp; Lithology:</strong> ${site.geologicalContext}
+        </div>
+        <a href="${site.sourceUrl}" target="_blank" rel="noreferrer" class="inline-block font-mono text-[11px] text-mars-ochre hover:text-mars-accent pt-1">
+          Source: ${site.source} ↗
+        </a>
+      `;
+    }
+
+    function initOpenLayersMap(focusCoord = null) {
+      const targetEl = document.getElementById('olMapCanvas');
+      if (!targetEl) return;
+
+      const baseCfg = MAP_LAYERS.find(l => l.id === state.baseLayerId) || MAP_LAYERS[0];
+      const overCfg = MAP_LAYERS.find(l => l.id === state.overlayLayerId) || null;
+
+      const baseLayer = new ol.layer.Tile({ source: createTrekSource(baseCfg) });
+      const overlayLayer = new ol.layer.Tile({
+        opacity: state.overlayOpacity,
+        visible: Boolean(overCfg && state.overlayLayerId !== 'none'),
+        source: overCfg ? createTrekSource(overCfg) : undefined
+      });
+
+      const graticuleSource = new ol.source.Vector();
+      const graticuleLayer = new ol.layer.Vector({
+        source: graticuleSource,
+        style: new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: 'rgba(140, 157, 181, 0.20)', width: 1, lineDash: [4, 4] })
+        })
+      });
+
+      const vectorSource = new ol.source.Vector();
+      const vectorLayer = new ol.layer.Vector({ source: vectorSource });
+
+      const startCenter = focusCoord ? [focusCoord.lon, focusCoord.lat] : [JEZERO_CENTER.lon, JEZERO_CENTER.lat];
+      const startZoom = focusCoord?.zoom || (focusCoord ? 10 : 9);
+
+      const map = new ol.Map({
+        target: targetEl,
+        layers: [baseLayer, overlayLayer, graticuleLayer, vectorLayer],
+        view: new ol.View({
+          projection: 'EPSG:4326',
+          center: startCenter,
+          zoom: startZoom,
+          minZoom: 2,
+          maxZoom: 12
+        })
+      });
+
+      olMapInstance = map;
+
+      function populateMapVectors() {
+        graticuleSource.clear();
+        if (state.showGraticule) {
+          for (let lon = 75; lon <= 80; lon += 0.25) {
+            graticuleSource.addFeature(new ol.Feature({ geometry: new ol.geom.LineString([[lon, 16.5], [lon, 20.5]]) }));
+          }
+          for (let lat = 16.5; lat <= 20.5; lat += 0.25) {
+            graticuleSource.addFeature(new ol.Feature({ geometry: new ol.geom.LineString([[75, lat], [80, lat]]) }));
+          }
+        }
+
+        vectorSource.clear();
+        if (state.waypoints.length >= 2) {
+          const lineFeat = new ol.Feature({
+            geometry: new ol.geom.LineString(state.waypoints.map(w => [w.lon, w.lat]))
+          });
+          lineFeat.setStyle(new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: '#E5A952', width: 2.5, lineDash: [6, 5] })
+          }));
+          vectorSource.addFeature(lineFeat);
+        }
+
+        VERIFIED_SITES.forEach(site => {
+          const isSel = site.id === state.selectedSiteId;
+          const f = new ol.Feature({
+            geometry: new ol.geom.Point([site.lon, site.lat]),
+            siteId: site.id
+          });
+          f.setStyle(new ol.style.Style({
+            image: new ol.style.Circle({
+              radius: isSel ? 7.5 : 5.5,
+              fill: new ol.style.Fill({ color: isSel ? '#E06D4B' : '#4CC38A' }),
+              stroke: new ol.style.Stroke({ color: '#06090E', width: 2 })
+            }),
+            text: new ol.style.Text({
+              text: site.name,
+              offsetY: -14,
+              font: '600 11px Inter, sans-serif',
+              fill: new ol.style.Fill({ color: '#ECF1F8' }),
+              stroke: new ol.style.Stroke({ color: '#06090E', width: 3 })
+            })
+          }));
+          vectorSource.addFeature(f);
+        });
+
+        if (state.showUserMarkers) {
+          state.observations.forEach(obs => {
+            const f = new ol.Feature({
+              geometry: new ol.geom.Point([obs.longitude, obs.latitude])
+            });
+            f.setStyle(new ol.style.Style({
+              image: new ol.style.Circle({
+                radius: 5.5,
+                fill: new ol.style.Fill({ color: '#D49B6A' }),
+                stroke: new ol.style.Stroke({ color: '#ECF1F8', width: 1.5 })
+              }),
+              text: new ol.style.Text({
+                text: `[FIELD] ${obs.title.slice(0, 22)}`,
+                offsetY: 14,
+                font: '500 10px "IBM Plex Mono", monospace',
+                fill: new ol.style.Fill({ color: '#D49B6A' }),
+                stroke: new ol.style.Stroke({ color: '#06090E', width: 3 })
+              })
+            }));
+            vectorSource.addFeature(f);
+          });
+        }
+      }
+
+      function updateScaleBar(lat = JEZERO_CENTER.lat) {
+        const z = map.getView().getZoom() || 9;
+        const degPerPx = 0.703125 / Math.pow(2, z);
+        const metersPerDegLon = (Math.PI / 180) * MARS_RADIUS_M * Math.cos(toRad(lat));
+        const kmFor112Px = (degPerPx * metersPerDegLon * 112) / 1000;
+        const scaleEl = document.getElementById('mapScaleLabel');
+        const zoomEl = document.getElementById('mapZoomReadout');
+        if (scaleEl) scaleEl.textContent = kmFor112Px >= 1 ? `${kmFor112Px.toFixed(1)} km` : `${(kmFor112Px * 1000).toFixed(0)} m`;
+        if (zoomEl) zoomEl.textContent = `Z${z.toFixed(1)}`;
+      }
+
+      populateMapVectors();
+      updateScaleBar();
+
+      map.on('pointermove', evt => {
+        if (evt.dragging) return;
+        const [lon, lat] = evt.coordinate;
+        const cEl = document.getElementById('mapCursorReadout');
+        if (cEl) cEl.textContent = formatMarsCoords(lat, lon, 4);
+      });
+
+      map.on('moveend', () => {
+        const center = map.getView().getCenter() || [JEZERO_CENTER.lon, JEZERO_CENTER.lat];
+        updateScaleBar(center[1]);
+      });
+
+      map.on('singleclick', evt => {
+        map.forEachFeatureAtPixel(evt.pixel, feat => {
+          const sId = feat.get('siteId');
+          if (sId) {
+            selectExplorerSite(sId);
+            return true;
+          }
+        });
+      });
+
+      document.getElementById('mapBaseSelect').addEventListener('change', e => {
+        state.baseLayerId = e.target.value;
+        const nextBase = MAP_LAYERS.find(l => l.id === state.baseLayerId);
+        if (nextBase) {
+          baseLayer.setSource(createTrekSource(nextBase));
+          document.getElementById('headerActiveDataset').textContent = nextBase.title;
+          document.getElementById('legendTitle').textContent = nextBase.shortName;
+          document.getElementById('legendDesc').textContent = nextBase.coverageNote;
+          document.getElementById('legendBar').style.background = `linear-gradient(to right, ${nextBase.legendGradient.join(', ')})`;
+          document.getElementById('legendMin').textContent = nextBase.legendMin;
+          document.getElementById('legendMax').textContent = nextBase.legendMax;
+          logEvent('NASA Mars Trek WMTS', nextBase.trekLayerId, 'SUCCESS', `Switched base mosaic to ${nextBase.title}.`);
+        }
+      });
+
+      document.getElementById('mapOverlaySelect').addEventListener('change', e => {
+        state.overlayLayerId = e.target.value;
+        if (state.overlayLayerId === 'none') {
+          overlayLayer.setVisible(false);
+        } else {
+          const nextOver = MAP_LAYERS.find(l => l.id === state.overlayLayerId);
+          if (nextOver) {
+            overlayLayer.setSource(createTrekSource(nextOver));
+            overlayLayer.setVisible(true);
+          }
+        }
+      });
+
+      document.getElementById('mapOpacitySlider').addEventListener('input', e => {
+        state.overlayOpacity = parseFloat(e.target.value);
+        overlayLayer.setOpacity(state.overlayOpacity);
+      });
+
+      document.getElementById('resetMapBtn').addEventListener('click', () => {
+        map.getView().animate({ center: [JEZERO_CENTER.lon, JEZERO_CENTER.lat], zoom: 9, duration: 400 });
+      });
+
+      window.refreshExplorerVectors = populateMapVectors;
+    }
+
+    function selectExplorerSite(siteId) {
+      state.selectedSiteId = siteId;
+      const site = VERIFIED_SITES.find(s => s.id === siteId);
+      if (!site) return;
+      const box = document.getElementById('siteDossierBox');
+      if (box) box.innerHTML = renderSiteDossierInner(site);
+      if (olMapInstance) {
+        olMapInstance.getView().animate({ center: [site.lon, site.lat], zoom: 10.2, duration: 450 });
+        if (window.refreshExplorerVectors) window.refreshExplorerVectors();
+      }
+    }
+
+    /********************************************************************
+     * 7. MODULE 03: TERRAIN ANALYSIS
+     ********************************************************************/
+    function renderTerrainModule(container) {
+      const transect = TRANSECTS.find(t => t.id === state.selectedTransectId) || TRANSECTS[0];
+      const segments = transect.samples.map((s, i) => {
+        if (i === 0) return { ...s, slopeDeg: 0 };
+        const prev = transect.samples[i - 1];
+        const dz = Math.abs(s.elevationM - prev.elevationM);
+        const dx = Math.max(1, (s.distanceKm - prev.distanceKm) * 1000);
+        return { ...s, slopeDeg: toDeg(Math.atan(dz / dx)) };
+      });
+
+      const inspected = segments[Math.min(state.inspectedStationIdx, segments.length - 1)] || segments[0];
+
+      const W = 740, H = 260, pad = { t: 22, r: 24, b: 42, l: 60 };
+      const pW = W - pad.l - pad.r, pH = H - pad.t - pad.b;
+      const minX = 0, maxX = segments[segments.length - 1].distanceKm;
+      const minY = -2620, maxY = -2100;
+      const sx = x => pad.l + ((x - minX) / (maxX - minX || 1)) * pW;
+      const sy = y => pad.t + pH - ((y - minY) / (maxY - minY || 1)) * pH;
+
+      const linePath = segments.map((s, i) => `${i === 0 ? 'M' : 'L'} ${sx(s.distanceKm).toFixed(1)} ${sy(s.elevationM).toFixed(1)}`).join(' ');
+      const areaPath = `${linePath} L ${sx(maxX).toFixed(1)} ${pad.t + pH} L ${sx(0).toFixed(1)} ${pad.t + pH} Z`;
+
+      const bins = [
+        { label: '0–1° Floor', count: 0 },
+        { label: '1–2° Apron', count: 0 },
+        { label: '2–3° Delta', count: 0 },
+        { label: '>3° Wall', count: 0 }
+      ];
+      segments.slice(1).forEach(s => {
+        if (s.slopeDeg < 1) bins[0].count++;
+        else if (s.slopeDeg < 2) bins[1].count++;
+        else if (s.slopeDeg < 3) bins[2].count++;
+        else bins[3].count++;
+      });
+
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-5 space-y-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+                MODULE 03 // MOLA HYPSOMETRY &amp; HORN (1981) MORPHOMETRY
+              </div>
+              <h1 class="font-display text-lg font-bold text-mars-text mt-0.5">
+                Terrain Analysis — Jezero Basin Elevation Transects &amp; Slope Gradients
+              </h1>
+            </div>
+            <div class="flex flex-wrap items-center gap-2.5 text-xs">
+              <select
+                onchange="state.selectedTransectId = this.value; state.inspectedStationIdx = 0; renderActiveModule();"
+                class="px-3 py-2 rounded-lg bg-mars-void border border-mars-border text-mars-text font-medium"
+              >
+                ${TRANSECTS.map(t => `<option value="${t.id}" ${t.id === transect.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+              </select>
+              <button
+                onclick="exportTransectCsv()"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-mars-elevated hover:bg-mars-border border border-mars-border text-mars-text font-mono"
+              >
+                <i data-lucide="download" class="w-3.5 h-3.5 text-mars-accent"></i> Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-mars-warning/10 border border-mars-warning/40 flex items-start gap-2.5 text-xs text-mars-muted">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-mars-warning shrink-0 mt-0.5"></i>
+            <div>
+              <strong class="text-mars-warning font-mono">RESOLUTION DISCLOSURE (463 m/px MOLA MEGDR):</strong>
+              Global MOLA laser altimetry resolves macro-scale crater relief (0°–5° regional gradients). It does not resolve meter-scale boulders or local rover scarps, which require 1 m/px HiRISE stereo DTMs.
+            </div>
+          </div>
+        </section>
+
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <div class="xl:col-span-2 hud-card rounded-xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="font-display text-sm font-semibold text-mars-text">${transect.name}</h2>
+                <p class="text-xs text-mars-muted">${transect.description}</p>
+              </div>
+              ${provenanceBadgeHtml('DERIVED', 'MOLA MEGDR 463 m/px')}
+            </div>
+
+            <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto font-mono select-none">
+              <defs>
+                <linearGradient id="molaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#E06D4B" stop-opacity="0.45" />
+                  <stop offset="100%" stop-color="#E06D4B" stop-opacity="0.02" />
+                </linearGradient>
+              </defs>
+              ${[-2600, -2475, -2350, -2225, -2100].map(val => `
+                <line x1="${pad.l}" y1="${sy(val)}" x2="${W - pad.r}" y2="${sy(val)}" stroke="#223144" stroke-dasharray="3 3" />
+                <text x="${pad.l - 8}" y="${sy(val) + 4}" text-anchor="end" fill="#8C9DB5" font-size="10">${val}m</text>
+              `).join('')}
+
+              <path d="${areaPath}" fill="url(#molaGrad)" />
+              <path d="${linePath}" fill="none" stroke="#E06D4B" stroke-width="2.5" />
+
+              <line
+                x1="${sx(inspected.distanceKm)}" y1="${pad.t}"
+                x2="${sx(inspected.distanceKm)}" y2="${pad.t + pH}"
+                stroke="#D49B6A" stroke-width="1.5" stroke-dasharray="4 3"
+              />
+
+              ${segments.map((s, idx) => `
+                <g class="cursor-pointer" onclick="state.inspectedStationIdx = ${idx}; renderActiveModule();">
+                  <circle
+                    cx="${sx(s.distanceKm)}" cy="${sy(s.elevationM)}"
+                    r="${idx === state.inspectedStationIdx ? 6 : 4}"
+                    fill="${idx === state.inspectedStationIdx ? '#ECF1F8' : '#E06D4B'}"
+                    stroke="#06090E" stroke-width="1.5"
+                  />
+                </g>
+              `).join('')}
+
+              <text x="${pad.l + pW / 2}" y="${H - 6}" text-anchor="middle" fill="#8C9DB5" font-size="11">
+                Transect Geodesic Distance (km) — Click any station node to inspect
+              </text>
+            </svg>
+          </div>
+
+          <div class="hud-card rounded-xl p-5 flex flex-col justify-between space-y-4">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h2 class="font-display text-sm font-semibold text-mars-text">Regional Slope Distribution</h2>
+                ${provenanceBadgeHtml('DERIVED')}
+              </div>
+              <div class="space-y-2.5 pt-2">
+                ${bins.map(b => {
+                  const pct = Math.round((b.count / Math.max(1, segments.length - 1)) * 100);
+                  return `
+                    <div class="space-y-1 text-xs font-mono">
+                      <div class="flex justify-between">
+                        <span class="text-mars-text">${b.label}</span>
+                        <span class="text-mars-ochre">${b.count} segs (${pct}%)</span>
+                      </div>
+                      <div class="w-full h-2.5 rounded bg-mars-void overflow-hidden border border-mars-border">
+                        <div class="h-full bg-mars-accent" style="width: ${Math.max(6, pct)}%"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-lg bg-mars-void border border-mars-border space-y-2 font-mono text-xs">
+              <div class="text-[10px] text-mars-ochre uppercase">Active Station #${state.inspectedStationIdx + 1} // ${inspected.zone}</div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <span class="text-mars-muted text-[10px]">ELEVATION:</span>
+                  <div class="text-mars-text font-bold text-sm">${inspected.elevationM} m</div>
+                </div>
+                <div>
+                  <span class="text-mars-muted text-[10px]">SLOPE ANGLE:</span>
+                  <div class="text-mars-accent font-bold text-sm">${inspected.slopeDeg.toFixed(2)}°</div>
+                </div>
+              </div>
+              <div class="text-[10px] text-mars-muted pt-1 border-t border-mars-border">
+                Coords: ${inspected.lat.toFixed(3)}°N, ${inspected.lon.toFixed(3)}°E | Dist: ${inspected.distanceKm.toFixed(1)} km
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function exportTransectCsv() {
+      const transect = TRANSECTS.find(t => t.id === state.selectedTransectId) || TRANSECTS[0];
+      downloadCsv(
+        `areion_${transect.id}.csv`,
+        ['AREION Derived MOLA Transect', `Profile: ${transect.name}`, 'Classification: DERIVED (463 m/px MOLA MEGDR)'],
+        ['distance_km', 'latitude_N', 'longitude_E', 'elevation_m', 'geomorph_zone'],
+        transect.samples.map(s => [s.distanceKm, s.lat, s.lon, s.elevationM, s.zone])
+      );
+    }
+
+    /********************************************************************
+     * 8. MODULE 04: SCIENCE LAB (MASTCAM-Z FILTER LAB + HYPSOMETRY + PDS4)
+     ********************************************************************/
+    function applyMastcamPreset(presetId) {
+      state.mastcamPresetId = presetId;
+      const p = MASTCAMZ_COMPOSITE_PRESETS.find(x => x.id === presetId);
+      if (p) {
+        state.mastcamRedCode = p.rCode;
+        state.mastcamGreenCode = p.gCode;
+        state.mastcamBlueCode = p.bCode;
+      }
+      renderActiveModule();
+    }
+
+    function computeFalseColorHex(endmember, rIdx, gIdx, bIdx) {
+      // Normalize R* values across the 3 selected bands with stretch to highlight contrast
+      const rVal = endmember.rStar[rIdx] || 0.1;
+      const gVal = endmember.rStar[gIdx] || 0.1;
+      const bVal = endmember.rStar[bIdx] || 0.1;
+      const mean = (rVal + gVal + bVal) / 3 || 0.1;
+      const stretch = 2.4;
+      const toByte = v => Math.max(28, Math.min(245, Math.round((0.5 + (v - mean) * stretch / mean) * 215)));
+      const R = toByte(rVal), G = toByte(gVal), B = toByte(bVal);
+      return `rgb(${R}, ${G}, ${B})`;
+    }
+
+    function renderScienceLabModule(container) {
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+              MODULE 04 // MASTCAM-Z VNIR SPECTROSCOPY, HYPSOMETRY &amp; PDS4 REGISTRY
+            </div>
+            <h1 class="font-display text-lg font-bold text-mars-text mt-0.5">
+              Science Lab — Multi-Spectral Filter Comparison &amp; Planetary Archive
+            </h1>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <button
+              onclick="state.scienceLabMode = 'mastcamz'; renderActiveModule();"
+              class="px-3.5 py-2 rounded-lg border transition ${state.scienceLabMode === 'mastcamz' ? 'bg-mars-accent text-mars-void font-bold border-mars-accent' : 'bg-mars-void border-mars-border text-mars-muted hover:text-mars-text'}"
+            >
+              Mastcam-Z VNIR Filter Simulator
+            </button>
+            <button
+              onclick="state.scienceLabMode = 'scatter'; renderActiveModule();"
+              class="px-3.5 py-2 rounded-lg border transition ${state.scienceLabMode === 'scatter' ? 'bg-mars-accent text-mars-void font-bold border-mars-accent' : 'bg-mars-void border-mars-border text-mars-muted hover:text-mars-text'}"
+            >
+              Site Hypsometry Matrix
+            </button>
+            <button
+              onclick="state.scienceLabMode = 'pds'; renderActiveModule(); if(!state.pdsProducts.length) queryPdsArchive();"
+              class="px-3.5 py-2 rounded-lg border transition ${state.scienceLabMode === 'pds' ? 'bg-mars-accent text-mars-void font-bold border-mars-accent' : 'bg-mars-void border-mars-border text-mars-muted hover:text-mars-text'}"
+            >
+              Live NASA PDS4 Registry
+            </button>
+          </div>
+        </section>
+
+        <div id="scienceLabSubContainer" class="space-y-5"></div>
+      `;
+
+      const sub = document.getElementById('scienceLabSubContainer');
+      if (state.scienceLabMode === 'mastcamz') {
+        renderMastcamZLab(sub);
+      } else if (state.scienceLabMode === 'scatter') {
+        renderHypsometryScatter(sub);
+      } else {
+        renderPdsRegistry(sub);
+      }
+    }
+
+    function renderMastcamZLab(sub) {
+      const rIdx = Math.max(0, MASTCAMZ_FILTERS.findIndex(f => f.code === state.mastcamRedCode));
+      const gIdx = Math.max(0, MASTCAMZ_FILTERS.findIndex(f => f.code === state.mastcamGreenCode));
+      const bIdx = Math.max(0, MASTCAMZ_FILTERS.findIndex(f => f.code === state.mastcamBlueCode));
+
+      const rFilter = MASTCAMZ_FILTERS[rIdx];
+      const gFilter = MASTCAMZ_FILTERS[gIdx];
+      const bFilter = MASTCAMZ_FILTERS[bIdx];
+
+      const activeEndmember = JEZERO_SPECTRAL_ENDMEMBERS.find(e => e.id === state.mastcamSelectedEndmemberId) || JEZERO_SPECTRAL_ENDMEMBERS[0];
+      const activePreset = MASTCAMZ_COMPOSITE_PRESETS.find(p => p.id === state.mastcamPresetId);
+
+      // Compute diagnostic spectral parameters for active endmember
+      // Indices in MASTCAMZ_FILTERS: L6(442)=0, L4(605)=4, L2(754)=7, L1/R1(800)=8, R3(910)=10, R4(939)=11, R5(978)=12, R6(1022)=13
+      const ferricSlope = (activeEndmember.rStar[7] / activeEndmember.rStar[0]).toFixed(2);
+      const maficRatio = (activeEndmember.rStar[13] / activeEndmember.rStar[8]).toFixed(2);
+      const hydrationDepth = ((1 - (activeEndmember.rStar[12] / ((activeEndmember.rStar[11] + activeEndmember.rStar[13]) / 2))) * 100).toFixed(1);
+
+      // SVG Spectral Plot Dimensions
+      const W = 760, H = 310, pad = { t: 28, r: 28, b: 46, l: 58 };
+      const pW = W - pad.l - pad.r, pH = H - pad.t - pad.b;
+      const minW = 420, maxW = 1050;
+      const minR = 0.04, maxR = 0.38;
+      const sx = wl => pad.l + ((wl - minW) / (maxW - minW)) * pW;
+      const sy = r => pad.t + pH - ((r - minR) / (maxR - minR)) * pH;
+
+      sub.innerHTML = `
+        <!-- Composite Presets & Manual RGB Filter Wheel Assignment -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <div class="xl:col-span-2 hud-card rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="font-display text-sm font-semibold text-mars-text">
+                  Mastcam-Z 14-Channel VNIR Reflectance ($R^*$) Spectra (442–1022 nm)
+                </h2>
+                <p class="text-xs text-mars-muted">
+                  Published narrowband + Bayer filter bandpasses (Bell et al., 2021; Rice et al., 2023). Vertical bars mark active R/G/B composite channels.
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                ${provenanceBadgeHtml('REAL DATA', 'Bell et al. 2021 / Rice et al. 2023')}
+                <button
+                  onclick="exportMastcamSpectraCsv()"
+                  class="px-2.5 py-1 rounded bg-mars-elevated border border-mars-border font-mono text-[11px] text-mars-text hover:border-mars-accent"
+                >
+                  Export CSV
+                </button>
+              </div>
+            </div>
+
+            <!-- Interactive SVG VNIR Spectral Chart -->
+            <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto font-mono select-none">
+              <!-- Horizontal R* Grid -->
+              ${[0.05, 0.15, 0.25, 0.35].map(val => `
+                <line x1="${pad.l}" y1="${sy(val)}" x2="${W - pad.r}" y2="${sy(val)}" stroke="#223144" stroke-dasharray="3 3" />
+                <text x="${pad.l - 8}" y="${sy(val) + 4}" text-anchor="end" fill="#8C9DB5" font-size="10">${val.toFixed(2)}</text>
+              `).join('')}
+
+              <!-- Vertical Filter Wheel Wavelength Positions -->
+              ${MASTCAMZ_FILTERS.map(f => `
+                <line x1="${sx(f.wl)}" y1="${pad.t}" x2="${sx(f.wl)}" y2="${pad.t + pH}" stroke="#182435" stroke-width="1" />
+                <text x="${sx(f.wl)}" y="${pad.t + pH + 14}" text-anchor="middle" fill="#8C9DB5" font-size="9">${f.wl}</text>
+              `).join('')}
+
+              <!-- Highlight Active RGB Filter Channels -->
+              <rect x="${sx(rFilter.wl) - 6}" y="${pad.t}" width="12" height="${pH}" fill="#EF4444" fill-opacity="0.18" />
+              <text x="${sx(rFilter.wl)}" y="${pad.t - 8}" text-anchor="middle" fill="#EF4444" font-size="10" font-weight="bold">R:${rFilter.code}</text>
+
+              <rect x="${sx(gFilter.wl) - 6}" y="${pad.t}" width="12" height="${pH}" fill="#10B981" fill-opacity="0.18" />
+              <text x="${sx(gFilter.wl)}" y="${pad.t - 8}" text-anchor="middle" fill="#10B981" font-size="10" font-weight="bold">G:${gFilter.code}</text>
+
+              <rect x="${sx(bFilter.wl) - 6}" y="${pad.t}" width="12" height="${pH}" fill="#3B82F6" fill-opacity="0.18" />
+              <text x="${sx(bFilter.wl)}" y="${pad.t - 8}" text-anchor="middle" fill="#3B82F6" font-size="10" font-weight="bold">B:${bFilter.code}</text>
+
+              <!-- Mineral Endmember Curves -->
+              ${JEZERO_SPECTRAL_ENDMEMBERS.map(em => {
+                const isSel = em.id === activeEndmember.id;
+                const d = em.rStar.map((r, i) => `${i === 0 ? 'M' : 'L'} ${sx(MASTCAMZ_FILTERS[i].wl).toFixed(1)} ${sy(r).toFixed(1)}`).join(' ');
+                return `
+                  <g class="cursor-pointer" onclick="state.mastcamSelectedEndmemberId = '${em.id}'; renderActiveModule();">
+                    <path d="${d}" fill="none" stroke="${em.stroke}" stroke-width="${isSel ? 3 : 1.6}" stroke-opacity="${isSel ? 1 : 0.55}" />
+                    ${em.rStar.map((r, i) => `
+                      <circle
+                        cx="${sx(MASTCAMZ_FILTERS[i].wl)}"
+                        cy="${sy(r)}"
+                        r="${isSel ? 4.2 : 2.5}"
+                        fill="${em.stroke}"
+                        stroke="#06090E"
+                        stroke-width="1"
+                      />
+                    `).join('')}
+                  </g>
+                `;
+              }).join('')}
+
+              <text x="${pad.l + pW / 2}" y="${H - 6}" text-anchor="middle" fill="#8C9DB5" font-size="11">
+                Filter Effective Wavelength λ_eff (nm) — Left Camera (442–800 nm) | Right Camera (800–1022 nm)
+              </text>
+            </svg>
+
+            <!-- Endmember Legend Selector Pills -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+              ${JEZERO_SPECTRAL_ENDMEMBERS.map(em => {
+                const active = em.id === activeEndmember.id;
+                const swatchRgb = computeFalseColorHex(em, rIdx, gIdx, bIdx);
+                return `
+                  <button
+                    onclick="state.mastcamSelectedEndmemberId = '${em.id}'; renderActiveModule();"
+                    class="p-2.5 rounded-lg border text-left transition flex items-center gap-2.5 ${
+                      active ? 'bg-mars-elevated border-mars-accent' : 'bg-mars-void/80 border-mars-border opacity-80 hover:opacity-100'
+                    }"
+                  >
+                    <div class="w-7 h-7 rounded border border-white/20 shrink-0 shadow-inner" style="background:${swatchRgb}" title="Simulated False-Color Swatch"></div>
+                    <div class="min-w-0">
+                      <div class="text-[11px] font-semibold text-mars-text truncate">${em.name.split('(')[0]}</div>
+                      <div class="font-mono text-[10px]" style="color:${em.stroke}">${em.unit}</div>
+                    </div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Right Column: Filter Wheel Channel Mixer & Band Ratio Readouts -->
+          <div class="space-y-4">
+            <div class="hud-card rounded-xl p-4 space-y-3 text-xs">
+              <div class="flex items-center justify-between border-b border-mars-border pb-2">
+                <span class="font-mono text-mars-ochre uppercase font-semibold">Composite Band Mixer</span>
+                <span class="font-mono text-[10px] text-mars-muted">L1–L6 / R1–R6</span>
+              </div>
+
+              <!-- Preset Selector -->
+              <div>
+                <label class="block text-[11px] text-mars-muted mb-1">Standard Mars 2020 Science Presets</label>
+                <select
+                  onchange="applyMastcamPreset(this.value)"
+                  class="w-full px-3 py-2 rounded bg-mars-void border border-mars-border text-mars-text font-medium"
+                >
+                  ${MASTCAMZ_COMPOSITE_PRESETS.map(p => `<option value="${p.id}" ${p.id === state.mastcamPresetId ? 'selected' : ''}>${p.name}</option>`).join('')}
+                </select>
+                ${activePreset ? `<p class="text-[11px] text-mars-muted mt-1.5 leading-snug">${activePreset.rationale}</p>` : ''}
+              </div>
+
+              <!-- Custom R / G / B Filter Wheel Dropdowns -->
+              <div class="grid grid-cols-3 gap-2 pt-1 font-mono">
+                <div>
+                  <label class="block text-[10px] text-red-400 mb-1">RED CH</label>
+                  <select
+                    onchange="state.mastcamRedCode = this.value; state.mastcamPresetId = 'custom'; renderActiveModule();"
+                    class="w-full px-2 py-1.5 rounded bg-mars-void border border-mars-border text-[11px] text-mars-text"
+                  >
+                    ${MASTCAMZ_FILTERS.map(f => `<option value="${f.code}" ${f.code === state.mastcamRedCode ? 'selected' : ''}>${f.code} (${f.wl})</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-emerald-400 mb-1">GREEN CH</label>
+                  <select
+                    onchange="state.mastcamGreenCode = this.value; state.mastcamPresetId = 'custom'; renderActiveModule();"
+                    class="w-full px-2 py-1.5 rounded bg-mars-void border border-mars-border text-[11px] text-mars-text"
+                  >
+                    ${MASTCAMZ_FILTERS.map(f => `<option value="${f.code}" ${f.code === state.mastcamGreenCode ? 'selected' : ''}>${f.code} (${f.wl})</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-blue-400 mb-1">BLUE CH</label>
+                  <select
+                    onchange="state.mastcamBlueCode = this.value; state.mastcamPresetId = 'custom'; renderActiveModule();"
+                    class="w-full px-2 py-1.5 rounded bg-mars-void border border-mars-border text-[11px] text-mars-text"
+                  >
+                    ${MASTCAMZ_FILTERS.map(f => `<option value="${f.code}" ${f.code === state.mastcamBlueCode ? 'selected' : ''}>${f.code} (${f.wl})</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Selected Endmember Spectral Indices Card -->
+            <div class="hud-card rounded-xl p-4 space-y-3 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-[11px] uppercase text-mars-accent font-semibold">Diagnostic Band Ratios</span>
+                ${provenanceBadgeHtml('DERIVED')}
+              </div>
+              <div class="font-display font-bold text-sm text-mars-text">${activeEndmember.name}</div>
+              <p class="text-[11px] text-mars-muted leading-relaxed">${activeEndmember.note}</p>
+
+              <div class="grid grid-cols-3 gap-2 font-mono text-center pt-1">
+                <div class="p-2 rounded bg-mars-void border border-mars-border">
+                  <div class="text-[9px] text-mars-muted">L2/L6 FERRIC</div>
+                  <div class="text-sm font-bold text-mars-ochre mt-0.5">${ferricSlope}</div>
+                </div>
+                <div class="p-2 rounded bg-mars-void border border-mars-border">
+                  <div class="text-[9px] text-mars-muted">R6/R1 MAFIC</div>
+                  <div class="text-sm font-bold text-mars-success mt-0.5">${maficRatio}</div>
+                </div>
+                <div class="p-2 rounded bg-mars-void border border-mars-border">
+                  <div class="text-[9px] text-mars-muted">R5 HYDRATION</div>
+                  <div class="text-sm font-bold text-mars-accent mt-0.5">${hydrationDepth}%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Complete Mastcam-Z Filter Wheel Technical Specification Table -->
+        <div class="hud-card rounded-xl overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-mars-border flex flex-wrap items-center justify-between gap-2">
+            <span class="font-display text-xs font-semibold text-mars-text uppercase tracking-wider">
+              Mastcam-Z Filter Wheel Reference Matrix (Bell et al., 2021; Hayes et al., 2021)
+            </span>
+            <span class="font-mono text-[11px] text-mars-muted">Focal Length: 26–110 mm (4:1 Zoom) | Detector: 1600×1200 KAI-2020 CCD</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-mars-void border-b border-mars-border font-mono text-[11px] text-mars-muted">
+                  <th class="py-2.5 px-4">Filter Code</th>
+                  <th class="py-2.5 px-4">Camera Head</th>
+                  <th class="py-2.5 px-4">λ_eff ± HWHM (nm)</th>
+                  <th class="py-2.5 px-4">Active R* (${activeEndmember.name.split(' ')[0]})</th>
+                  <th class="py-2.5 px-4">Primary Mineralogical &amp; Atmospheric Diagnostic</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-mars-border">
+                ${MASTCAMZ_FILTERS.map((f, idx) => `
+                  <tr class="hover:bg-mars-elevated/40">
+                    <td class="py-2 px-4 font-mono font-semibold text-mars-accent">${f.code}</td>
+                    <td class="py-2 px-4 font-mono text-[11px] text-mars-muted">${f.eye}</td>
+                    <td class="py-2 px-4 font-mono text-mars-text">${f.wl} ± ${f.hwhm} nm</td>
+                    <td class="py-2 px-4 font-mono text-mars-ochre">${activeEndmember.rStar[idx].toFixed(3)}</td>
+                    <td class="py-2 px-4 text-mars-muted">${f.diagnostic}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function exportMastcamSpectraCsv() {
+      downloadCsv(
+        'areion_mastcamz_jezero_spectra.csv',
+        [
+          'AREION Mastcam-Z VNIR Filter Wheel & Jezero Endmember Reflectance (R*)',
+          'Filter Reference: Bell et al. (2021) Space Sci. Rev. 217:24; Rice et al. (2023) JGR Planets'
+        ],
+        ['filter_code', 'camera_eye', 'wavelength_nm', 'hwhm_nm', ...JEZERO_SPECTRAL_ENDMEMBERS.map(e => e.id)],
+        MASTCAMZ_FILTERS.map((f, i) => [
+          f.code,
+          f.eye,
+          f.wl,
+          f.hwhm,
+          ...JEZERO_SPECTRAL_ENDMEMBERS.map(e => e.rStar[i])
+        ])
+      );
+    }
+
+    function renderHypsometryScatter(sub) {
+      const W = 720, H = 250, pad = { t: 20, r: 30, b: 42, l: 64 };
+      const pW = W - pad.l - pad.r, pH = H - pad.t - pad.b;
+      const lons = VERIFIED_SITES.map(s => s.lon);
+      const elevs = VERIFIED_SITES.map(s => s.elevationM);
+      const minX = Math.min(...lons) - 0.008, maxX = Math.max(...lons) + 0.008;
+      const minY = Math.min(...elevs) - 15, maxY = Math.max(...elevs) + 15;
+      const sx = x => pad.l + ((x - minX) / (maxX - minX || 1)) * pW;
+      const sy = y => pad.t + pH - ((y - minY) / (maxY - minY || 1)) * pH;
+
+      sub.innerHTML = `
+        <div class="hud-card rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="font-display text-sm font-semibold text-mars-text">
+                East Longitude vs. Mars Aeroid Elevation Across Verified Jezero Sites
+              </h2>
+              <p class="text-xs text-mars-muted">
+                Illustrates the 114-meter topographic drop from the western Neretva Vallis inlet (77.385°E) to South Séítah (77.442°E).
+              </p>
+            </div>
+            ${provenanceBadgeHtml('REAL DATA', 'NASA Mars 2020 & MOLA')}
+          </div>
+
+          <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto font-mono">
+            ${[-2580, -2540, -2500, -2460].map(v => `
+              <line x1="${pad.l}" y1="${sy(v)}" x2="${W - pad.r}" y2="${sy(v)}" stroke="#223144" stroke-dasharray="3 3" />
+              <text x="${pad.l - 8}" y="${sy(v) + 4}" text-anchor="end" fill="#8C9DB5" font-size="10">${v}m</text>
+            `).join('')}
+            ${VERIFIED_SITES.map(s => `
+              <g>
+                <circle cx="${sx(s.lon)}" cy="${sy(s.elevationM)}" r="6" fill="#4CC38A" stroke="#06090E" stroke-width="2" />
+                <text x="${sx(s.lon)}" y="${sy(s.elevationM) - 10}" text-anchor="middle" fill="#ECF1F8" font-size="10">${s.name.split(' ')[0]}</text>
+              </g>
+            `).join('')}
+            <text x="${pad.l + pW / 2}" y="${H - 6}" text-anchor="middle" fill="#8C9DB5" font-size="11">
+              Planetocentric East Longitude (°E)
+            </text>
+          </svg>
+        </div>
+      `;
+    }
+
+    function renderPdsRegistry(sub) {
+      sub.innerHTML = `
+        <div class="hud-card rounded-xl p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="font-display text-sm font-semibold text-mars-text">Live NASA Planetary Data System (PDS4) Product Search</h2>
+              <p class="text-xs text-mars-muted">Queries <code>https://pds.nasa.gov/api/search/1/products</code> for archival LIDVIDs.</p>
+            </div>
+            <form onsubmit="event.preventDefault(); queryPdsArchive();" class="flex items-center gap-2 text-xs">
+              <input
+                id="pdsInput"
+                type="text"
+                value="${state.pdsQuery}"
+                onchange="state.pdsQuery = this.value"
+                class="px-3 py-1.5 rounded-lg bg-mars-void border border-mars-border font-mono text-mars-text"
+              />
+              <button type="submit" class="px-3 py-1.5 rounded-lg bg-mars-accent text-mars-void font-mono font-semibold">
+                Query PDS4
+              </button>
+            </form>
+          </div>
+
+          ${state.pdsError ? `
+            <div class="p-3.5 rounded-lg bg-mars-accent/10 border border-mars-accent/40 text-xs text-mars-accent font-mono">
+              PDS4 Endpoint Notice: ${state.pdsError}. (AREION never substitutes fake product IDs when CORS or network policies block a direct browser query.)
+            </div>
+          ` : ''}
+
+          ${state.pdsLoading ? `
+            <div class="py-8 text-center font-mono text-xs text-mars-muted">Querying NASA PDS4 Engineering Node...</div>
+          ` : state.pdsProducts.length > 0 ? `
+            <div class="overflow-x-auto border border-mars-border rounded-lg">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-mars-void border-b border-mars-border font-mono text-[11px] text-mars-muted">
+                    <th class="py-2.5 px-3">PDS4 LIDVID</th>
+                    <th class="py-2.5 px-3">Product Title</th>
+                    <th class="py-2.5 px-3">Start Time</th>
+                    <th class="py-2.5 px-3">Provenance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-mars-border">
+                  ${state.pdsProducts.map(p => `
+                    <tr class="hover:bg-mars-elevated/40">
+                      <td class="py-2.5 px-3 font-mono text-[11px] text-mars-ochre">${p.lidvid}</td>
+                      <td class="py-2.5 px-3 text-mars-text">${p.title}</td>
+                      <td class="py-2.5 px-3 font-mono text-[11px] text-mars-muted">${p.startTime}</td>
+                      <td class="py-2.5 px-3">${provenanceBadgeHtml('REAL DATA')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    async function queryPdsArchive() {
+      const inputEl = document.getElementById('pdsInput');
+      if (inputEl) state.pdsQuery = inputEl.value.trim() || 'jezero';
+      state.pdsLoading = true;
+      state.pdsError = null;
+      renderActiveModule();
+
+      const url = `https://pds.nasa.gov/api/search/1/products?q=${encodeURIComponent(state.pdsQuery)}&limit=10`;
+      try {
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const items = Array.isArray(json?.data) ? json.data : [];
+        state.pdsProducts = items.map((it, i) => ({
+          lidvid: it?.id || it?.properties?.lidvid?.[0] || `urn:nasa:pds:product:${i}`,
+          title: it?.title || it?.properties?.['pds:Identification_Area.pds:title']?.[0] || 'PDS4 Observational Product',
+          startTime: it?.properties?.['pds:Time_Coordinates.pds:start_date_time']?.[0] || 'Archival'
+        }));
+        logEvent('NASA PDS4 API', url, 'SUCCESS', `Retrieved ${state.pdsProducts.length} PDS4 records.`);
+      } catch (err) {
+        state.pdsError = err.message || 'Direct browser request blocked by CORS';
+        logEvent('NASA PDS4 API', url, 'ERROR', state.pdsError);
+      } finally {
+        state.pdsLoading = false;
+        renderActiveModule();
+      }
+    }
+
+    /********************************************************************
+     * 9. MODULE 05: ROUTE EXPLORER
+     ********************************************************************/
+    function renderRouteExplorerModule(container) {
+      let cum = 0;
+      const rows = state.waypoints.map((wp, idx) => {
+        if (idx === 0) return { ...wp, leg: 0, cum: 0, az: null };
+        const prev = state.waypoints[idx - 1];
+        const leg = marsDistanceMeters(prev, wp);
+        const az = marsForwardAzimuth(prev, wp);
+        cum += leg;
+        return { ...wp, leg, cum, az };
+      });
+      const lastAz = rows.length > 1 ? rows[rows.length - 1].az : 0;
+
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-5 space-y-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+                MODULE 05 // IAU MARS 2000 GREAT-CIRCLE TRAVERSE PLANNER
+              </div>
+              <h1 class="font-display text-lg font-bold text-mars-text mt-0.5">
+                Route Explorer — Planetary Geodesic Waypoint &amp; Azimuth Calculator
+              </h1>
+            </div>
+            <div class="flex items-center gap-2">
+              ${provenanceBadgeHtml('DERIVED', 'IAU Mars Sphere R=3,396.19 km')}
+              <button
+                onclick="state.explorerViewMode = '2d-wmts'; switchModule('explorer');"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-mars-accent text-mars-void font-display font-semibold text-xs"
+              >
+                <i data-lucide="map" class="w-3.5 h-3.5"></i> Inspect Traverse on Map
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-mars-warning/10 border border-mars-warning/50 flex items-center gap-2.5 text-xs font-mono text-mars-warning">
+            <i data-lucide="shield-alert" class="w-4 h-4 shrink-0"></i>
+            <span>STATUS: Preliminary geometric route — not terrain validated. Does not account for boulder fields or HiRISE stereo slope hazards.</span>
+          </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div class="space-y-4">
+            <div class="hud-card rounded-xl p-4 space-y-3 text-xs">
+              <div class="font-mono text-mars-ochre uppercase">Append Verified Waypoint</div>
+              <select id="presetSiteSelect" class="w-full px-3 py-2 rounded bg-mars-void border border-mars-border text-mars-text">
+                ${VERIFIED_SITES.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+              </select>
+              <button
+                onclick="addPresetWaypoint()"
+                class="w-full py-2 rounded bg-mars-accent text-mars-void font-display font-semibold"
+              >
+                + Append Site to Traverse
+              </button>
+            </div>
+
+            <div class="hud-card rounded-xl p-4 flex items-center justify-between">
+              <div class="space-y-1 font-mono">
+                <div class="text-[10px] text-mars-muted uppercase">FINAL LEG AZIMUTH</div>
+                <div class="text-2xl font-bold text-mars-ochre">${lastAz !== null ? `${lastAz.toFixed(1)}°` : '—'}</div>
+                <div class="text-[11px] text-mars-muted">Total: ${formatDistance(cum)}</div>
+              </div>
+              <svg width="96" height="96" viewBox="0 0 100 100" class="font-mono">
+                <circle cx="50" cy="50" r="44" fill="#06090E" stroke="#223144" stroke-width="2" />
+                <text x="50" y="16" text-anchor="middle" fill="#E06D4B" font-size="9">N</text>
+                <text x="86" y="53" text-anchor="middle" fill="#8C9DB5" font-size="8">E</text>
+                <text x="50" y="91" text-anchor="middle" fill="#8C9DB5" font-size="8">S</text>
+                <text x="14" y="53" text-anchor="middle" fill="#8C9DB5" font-size="8">W</text>
+                <g transform="rotate(${lastAz || 0}, 50, 50)">
+                  <polygon points="50,18 45,54 50,48 55,54" fill="#E06D4B" />
+                </g>
+                <circle cx="50" cy="50" r="3" fill="#ECF1F8" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="lg:col-span-2 hud-card rounded-xl p-5 space-y-4">
+            <h2 class="font-display text-sm font-semibold text-mars-text">Active Geodesic Waypoint Sequence</h2>
+            <div class="overflow-x-auto border border-mars-border rounded-lg">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-mars-void border-b border-mars-border font-mono text-[11px] text-mars-muted">
+                    <th class="py-2.5 px-3">Seq</th>
+                    <th class="py-2.5 px-3">Waypoint Label</th>
+                    <th class="py-2.5 px-3">Coordinates</th>
+                    <th class="py-2.5 px-3">Leg Distance</th>
+                    <th class="py-2.5 px-3">Forward Bearing</th>
+                    <th class="py-2.5 px-3">Cumulative</th>
+                    <th class="py-2.5 px-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-mars-border font-mono">
+                  ${rows.map((r, i) => `
+                    <tr class="hover:bg-mars-elevated/40">
+                      <td class="py-2.5 px-3 text-mars-accent">WP-0${i + 1}</td>
+                      <td class="py-2.5 px-3 font-sans font-medium text-mars-text">${r.label}</td>
+                      <td class="py-2.5 px-3 text-[11px] text-mars-muted">${formatMarsCoords(r.lat, r.lon, 4)}</td>
+                      <td class="py-2.5 px-3">${i === 0 ? 'ORIGIN' : formatDistance(r.leg)}</td>
+                      <td class="py-2.5 px-3 text-mars-ochre">${r.az !== null ? `${r.az.toFixed(1)}°` : '—'}</td>
+                      <td class="py-2.5 px-3 text-mars-success">${formatDistance(r.cum)}</td>
+                      <td class="py-2.5 px-3 text-right">
+                        <button onclick="removeWaypoint('${r.id}')" class="text-mars-muted hover:text-mars-accent">✕</button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function addPresetWaypoint() {
+      const sel = document.getElementById('presetSiteSelect');
+      const site = VERIFIED_SITES.find(s => s.id === sel.value);
+      if (!site) return;
+      state.waypoints.push({ id: `wp-${Date.now()}`, label: site.name, lat: site.lat, lon: site.lon });
+      renderActiveModule();
+    }
+
+    function removeWaypoint(id) {
+      state.waypoints = state.waypoints.filter(w => w.id !== id);
+      renderActiveModule();
+    }
+
+    /********************************************************************
+     * 10. MODULE 06: IMAGE EXPLORER & MODULE 07: OBSERVATIONS
+     ********************************************************************/
+    function renderImageExplorerModule(container) {
+      const filtered = state.imageItems.filter(it => {
+        if (state.imageJezeroOnly && !it.isVerifiedJezero) return false;
+        return true;
+      });
+
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-5 space-y-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+                MODULE 06 // NASA IMAGE &amp; VIDEO LIBRARY RESEARCH ARCHIVE
+              </div>
+              <h1 class="font-display text-lg font-bold text-mars-text mt-0.5">
+                Image Explorer — Authentic Mars 2020 &amp; Orbital Photography
+              </h1>
+            </div>
+            ${provenanceBadgeHtml('REAL DATA', 'images-api.nasa.gov')}
+          </div>
+
+          <form onsubmit="event.preventDefault(); executeImageSearch();" class="flex flex-wrap items-center gap-3 text-xs">
+            <input
+              id="nasaImgSearchInput"
+              type="text"
+              value="${state.imageQuery}"
+              onchange="state.imageQuery = this.value"
+              placeholder="Search NASA archive (e.g., perseverance jezero delta, mastcam-z)..."
+              class="flex-1 min-w-[240px] px-3.5 py-2 rounded-lg bg-mars-void border border-mars-border text-mars-text"
+            />
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-mars-void border border-mars-border text-mars-muted cursor-pointer">
+              <input
+                type="checkbox"
+                ${state.imageJezeroOnly ? 'checked' : ''}
+                onchange="state.imageJezeroOnly = this.checked; renderActiveModule();"
+                class="accent-mars-accent"
+              />
+              Verified Jezero Metadata Only
+            </label>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-mars-accent text-mars-void font-display font-semibold">
+              Search NASA API
+            </button>
+          </form>
+        </section>
+
+        ${state.imageLoading ? `
+          <div class="py-12 text-center font-mono text-xs text-mars-muted">Querying images-api.nasa.gov...</div>
+        ` : `
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            ${filtered.map(item => `
+              <article class="hud-card rounded-xl overflow-hidden flex flex-col justify-between group">
+                <div>
+                  <div class="relative h-44 bg-mars-void overflow-hidden">
+                    <img src="${item.thumbUrl}" alt="${item.title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                    ${item.isVerifiedJezero ? `
+                      <span class="absolute top-2 left-2 px-2 py-0.5 rounded bg-mars-void/90 border border-mars-success/50 font-mono text-[10px] text-mars-success">
+                        ✓ JEZERO VERIFIED
+                      </span>
+                    ` : ''}
+                  </div>
+                  <div class="p-3.5 space-y-1.5">
+                    <div class="font-mono text-[10px] text-mars-ochre truncate">${item.nasaId}</div>
+                    <h3 class="font-display text-xs font-semibold text-mars-text line-clamp-2">${item.title}</h3>
+                    <p class="text-[11px] text-mars-muted line-clamp-2">${item.description}</p>
+                  </div>
+                </div>
+                <div class="px-3.5 py-2 border-t border-mars-border bg-mars-void/80 flex items-center justify-between font-mono text-[10px] text-mars-muted">
+                  <span>${item.dateCreated.slice(0, 10)}</span>
+                  <a href="https://images.nasa.gov/details/${encodeURIComponent(item.nasaId)}" target="_blank" rel="noreferrer" class="text-mars-accent hover:underline">
+                    NASA Record ↗
+                  </a>
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        `}
+      `;
+
+      if (!state.imageItems.length && !state.imageLoading && !state.imageError) {
+        executeImageSearch();
+      }
+    }
+
+    async function executeImageSearch() {
+      const inp = document.getElementById('nasaImgSearchInput');
+      if (inp) state.imageQuery = inp.value.trim() || 'perseverance jezero crater';
+      state.imageLoading = true;
+      state.imageError = null;
+      renderActiveModule();
+
+      const url = `https://images-api.nasa.gov/search?q=${encodeURIComponent(state.imageQuery)}&media_type=image&page=1`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const raw = json?.collection?.items || [];
+        state.imageItems = raw.slice(0, 16).map(entry => {
+          const d = entry?.data?.[0] || {};
+          const l = entry?.links?.[0]?.href || '';
+          const text = `${d.title || ''} ${d.description || ''} ${(d.keywords || []).join(' ')}`.toLowerCase();
+          return {
+            nasaId: d.nasa_id || 'NASA-ASSET',
+            title: d.title || 'Untitled NASA Observation',
+            description: d.description || '',
+            dateCreated: d.date_created || 'Unknown',
+            thumbUrl: l,
+            isVerifiedJezero: text.includes('jezero')
+          };
+        }).filter(x => x.thumbUrl);
+        logEvent('NASA Image Library', url, 'SUCCESS', `Loaded ${state.imageItems.length} authentic Mars photographs.`);
+      } catch (err) {
+        state.imageError = err.message;
+        logEvent('NASA Image Library', url, 'ERROR', state.imageError);
+      } finally {
+        state.imageLoading = false;
+        renderActiveModule();
+      }
+    }
+
+    function renderObservationsModule(container) {
+      container.innerHTML = `
+        <section class="hud-card rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="text-[11px] font-mono uppercase tracking-wider text-mars-accent">
+              MODULE 07 // DIGITAL PLANETARY FIELD NOTEBOOK
+            </div>
+            <h1 class="font-display text-lg font-bold text-mars-text mt-0.5">
+              Geological Observations — Local Researcher Lithology Log
+            </h1>
+            <p class="text-xs text-mars-muted mt-0.5">
+              Stored in browser <code>localStorage</code> and plotted dynamically onto the Mars Explorer map. Explicitly labeled as user-generated records.
+            </p>
+          </div>
+          ${provenanceBadgeHtml('USER RECORD', 'Browser localStorage')}
+        </section>
+
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <form onsubmit="handleObservationSubmit(event)" class="hud-card rounded-xl p-5 space-y-3 text-xs">
+            <h2 class="font-display text-sm font-semibold text-mars-text border-b border-mars-border pb-2">
+              Log New Field Observation
+            </h2>
+            <div>
+              <label class="block text-mars-muted mb-1">Observation Title *</label>
+              <input id="obsTitle" required placeholder="e.g. Polygonal sulfate veins in mudstone" class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border text-mars-text" />
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-mars-muted mb-1">Latitude (°N) *</label>
+                <input id="obsLat" type="number" step="0.0001" value="18.4590" required class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border font-mono text-mars-text" />
+              </div>
+              <div>
+                <label class="block text-mars-muted mb-1">Longitude (°E) *</label>
+                <input id="obsLon" type="number" step="0.0001" value="77.4120" required class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border font-mono text-mars-text" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-mars-muted mb-1">Surface Material</label>
+                <select id="obsMat" class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border text-mars-text">
+                  <option>Sedimentary</option><option>Igneous</option><option>Regolith</option><option>Dust</option><option>Rock outcrop</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-mars-muted mb-1">Visible Texture</label>
+                <select id="obsTex" class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border text-mars-text">
+                  <option>Layered</option><option>Fractured</option><option>Granular</option><option>Smooth</option><option>Eroded</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-mars-muted mb-1">Geological Interpretation</label>
+              <textarea id="obsInterp" rows="2" placeholder="Working hypothesis..." class="w-full px-3 py-1.5 rounded bg-mars-void border border-mars-border text-mars-text"></textarea>
+            </div>
+            <button type="submit" class="w-full py-2 rounded-lg bg-mars-accent text-mars-void font-display font-semibold">
+              + Save Field Observation
+            </button>
+          </form>
+
+          <div class="xl:col-span-2 space-y-3">
+            ${state.observations.map(obs => `
+              <article class="hud-card rounded-xl p-4 space-y-2 text-xs">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      ${provenanceBadgeHtml('USER RECORD')}
+                      <span class="font-mono text-[11px] text-mars-muted">${formatMarsCoords(obs.latitude, obs.longitude, 4)}</span>
+                    </div>
+                    <h3 class="font-display text-sm font-bold text-mars-text mt-1">${obs.title}</h3>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      onclick="state.explorerViewMode = '2d-wmts'; switchModule('explorer', { lat: ${obs.latitude}, lon: ${obs.longitude} });"
+                      class="px-2.5 py-1 rounded bg-mars-elevated border border-mars-border font-mono text-[11px] text-mars-ochre hover:border-mars-accent"
+                    >
+                      Plot on 2D Map ↗
+                    </button>
+                    <button onclick="deleteObs('${obs.id}')" class="px-2 py-1 rounded bg-mars-void border border-mars-border text-mars-muted hover:text-mars-accent">✕</button>
+                  </div>
+                </div>
+                <div class="flex gap-2 font-mono text-[11px]">
+                  <span class="px-2 py-0.5 rounded bg-mars-void border border-mars-border text-mars-text">Material: ${obs.surfaceMaterial}</span>
+                  <span class="px-2 py-0.5 rounded bg-mars-void border border-mars-border text-mars-text">Texture: ${obs.visibleTexture}</span>
+                </div>
+                ${obs.geologicalInterpretation ? `<p class="text-mars-muted leading-relaxed">${obs.geologicalInterpretation}</p>` : ''}
+              </article>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function handleObservationSubmit(e) {
+      e.preventDefault();
+      state.observations.unshift({
+        id: `obs-${Date.now()}`,
+        title: document.getElementById('obsTitle').value.trim(),
+        locationName: 'Jezero Sector',
+        latitude: parseFloat(document.getElementById('obsLat').value),
+        longitude: parseFloat(document.getElementById('obsLon').value),
+        surfaceMaterial: document.getElementById('obsMat').value,
+        visibleTexture: document.getElementById('obsTex').value,
+        geologicalInterpretation: document.getElementById('obsInterp').value.trim(),
+        observationDate: new Date().toISOString().slice(0, 10)
+      });
+      saveObservations();
+      renderActiveModule();
+    }
+
+    function deleteObs(id) {
+      state.observations = state.observations.filter(o => o.id !== id);
+      saveObservations();
+      renderActiveModule();
+    }
+
+    /********************************************************************
+     * 11. BOOTSTRAP & LIVE EPHEMERIS TICKER
+     ********************************************************************/
+    function updateHeaderClock() {
+      const eph = computeMarsEphemeris();
+      const el = document.getElementById('headerMarsClock');
+      if (el) el.textContent = `Sol ${eph.perseveranceSol} // MTC ${eph.mtc}`;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      updateHeaderClock();
+      setInterval(updateHeaderClock, 1000);
+
+      document.getElementById('headerLastSync').textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + 'Z';
+
+      document.getElementById('settingsBtn').addEventListener('click', () => {
+        document.getElementById('settingsPopover').classList.toggle('hidden');
+      });
+
+      document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+        const sb = document.getElementById('sidebarNav');
+        sb.classList.toggle('hidden');
+        sb.classList.toggle('fixed');
+        sb.classList.toggle('inset-y-16');
+        sb.classList.toggle('left-0');
+      });
+
+      document.getElementById('toggleGraticule').addEventListener('change', e => {
+        state.showGraticule = e.target.checked;
+        if (window.refreshExplorerVectors) window.refreshExplorerVectors();
+      });
+
+      document.getElementById('toggleUserMarkers').addEventListener('change', e => {
+        state.showUserMarkers = e.target.checked;
+        if (window.refreshExplorerVectors) window.refreshExplorerVectors();
+      });
+
+      document.getElementById('toggleReticle').addEventListener('change', e => {
+        state.showReticle = e.target.checked;
+        const r = document.getElementById('mapCenterReticle');
+        if (r) r.classList.toggle('hidden', !state.showReticle);
+      });
+
+      renderSidebarNav();
+      renderActiveModule();
+    });
+  </script>
+</body>
+</html>
